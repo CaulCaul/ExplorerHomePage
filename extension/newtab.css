@@ -281,16 +281,18 @@ button { font-family: inherit; }
 
 #search-input::placeholder { color: var(--text-dim); opacity: 0.75; }
 
+/* 搜索按钮：悬停背景统一内缩 6px，圆角 = 外框 14px − 6px，与搜索框弧度嵌套一致 */
 #search-btn {
   display: grid;
   place-items: center;
-  width: 52px;
-  height: 44px;
-  margin-right: 6px;
+  width: 48px;
+  flex: none;
+  align-self: stretch;
+  margin: 6px;
   color: var(--text-dim);
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
   transition: color 0.15s, background 0.15s;
 }
