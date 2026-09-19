@@ -14,8 +14,14 @@
 
   /* ---------- 鼠标光晕 ---------- */
 
-  const GLOW_SIZE = 700;
   const glowEl = document.getElementById('glow');
+  let glowSize = 700; /* 可由设置调整，applyGlow 时更新 */
+
+  function clampNum(v, min, max, d) {
+    v = Number(v);
+    if (!isFinite(v)) v = d;
+    return Math.min(max, Math.max(min, v));
+  }
   let targetX = window.innerWidth / 2;
   let targetY = window.innerHeight / 2;
   let curX = targetX;
@@ -30,8 +36,8 @@
   function loop() {
     curX += (targetX - curX) * 0.14;
     curY += (targetY - curY) * 0.14;
-    glowEl.style.transform = 'translate3d(' + (curX - GLOW_SIZE / 2) + 'px,' +
-      (curY - GLOW_SIZE / 2) + 'px,0)';
+    glowEl.style.transform = 'translate3d(' + (curX - glowSize / 2) + 'px,' +
+      (curY - glowSize / 2) + 'px,0)';
     rafId = requestAnimationFrame(loop);
   }
 
@@ -39,6 +45,10 @@
     const enabled = !!(g && g.enabled);
     glowEl.hidden = !enabled;
     if (enabled) {
+      glowSize = clampNum(g.size, 200, 1200, 700);
+      glowEl.style.width = glowSize + 'px';
+      glowEl.style.height = glowSize + 'px';
+      glowEl.style.setProperty('--glow-o', clampNum(g.opacity, 0.1, 1, 0.5));
       glowEl.style.background = 'radial-gradient(circle, ' +
         (g.color || '#6366f1') + ' 0%, transparent 62%)';
       if (rafId === null) rafId = requestAnimationFrame(loop);

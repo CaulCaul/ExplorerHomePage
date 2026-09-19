@@ -18,7 +18,8 @@
   --offline: #dc2626;
   --icon-chip: #ffffff;
   --shadow: 0 18px 50px rgba(15, 23, 42, 0.16);
-  --edge-shadow: 14px 0 32px -10px rgba(15, 23, 42, 0.45);
+  --edge-shadow: 6px 0 14px -6px rgba(15, 23, 42, 0.55);
+  --edge-line: rgba(15, 23, 42, 0.16);
   --accent: #8b93f4;
   --accent-strong: #6366f1;
 }
@@ -38,7 +39,8 @@
   --offline: #f87171;
   --icon-chip: rgba(255, 255, 255, 0.92);
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
-  --edge-shadow: 14px 0 32px -10px rgba(0, 0, 0, 0.65);
+  --edge-shadow: 6px 0 14px -6px rgba(0, 0, 0, 0.8);
+  --edge-line: rgba(0, 0, 0, 0.5);
 }
 
 * { box-sizing: border-box; }
@@ -391,19 +393,18 @@ a.tile-link:hover {
 
 .tile-edit:hover { filter: brightness(0.95); }
 
-/* 添加按钮 */
+/* 添加按钮（与其他磁贴同构：图标位 + 标题位，虚线只出现在图标框上） */
 
 button.tile-link {
-  border: 1.5px dashed var(--border);
+  border: 0;
   background: transparent;
   cursor: pointer;
   color: var(--text-dim);
-  min-height: 100%;
 }
 
 button.tile-link:hover {
   color: var(--text);
-  border-color: var(--accent);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
   transform: translateY(-2px);
 }
 
@@ -412,9 +413,16 @@ button.tile-link:hover {
   place-items: center;
   width: 48px;
   height: 48px;
+  border: 1.5px dashed var(--border);
   border-radius: 12px;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 300;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+button.tile-link:hover .tile-plus {
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 /* ---------- 设置抽屉 ---------- */
@@ -766,14 +774,14 @@ input[type="range"] {
   z-index: 0;
   pointer-events: none;
   border-radius: 50%;
-  opacity: 0.5;
+  opacity: var(--glow-o, 0.5);
   filter: blur(6px);
   mix-blend-mode: multiply;
 }
 
 :root[data-theme='dark'] #glow {
   mix-blend-mode: screen;
-  opacity: 0.55;
+  opacity: calc(var(--glow-o, 0.5) * 1.1);
 }
 
 .image-panel {
@@ -788,14 +796,16 @@ input[type="range"] {
   background-position: center;
   background-repeat: no-repeat;
   transform: translateX(-101%);
-  box-shadow: 14px 0 32px -10px transparent;
-  transition: transform 0.3s ease, box-shadow 0.3s ease, width 0.25s ease;
+  border-right: 1px solid transparent;
+  box-shadow: 6px 0 14px -6px transparent;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease, width 0.25s ease;
 }
 
-/* 开启：滑入 + 右缘细阴影（图片在内容区上层的视觉效果） */
+/* 开启：滑入 + 右缘锐利细阴影与 1px 描边（图片浮于内容区上层的视觉效果） */
 body.has-image .image-panel {
   transform: none;
   box-shadow: var(--edge-shadow);
+  border-right-color: var(--edge-line);
 }
 
 /* 内容整体右移：在图片右侧的剩余区域中居中 */
@@ -807,9 +817,9 @@ body.has-image .shortcuts { width: min(600px, calc(90vw - var(--img-w, 33vw))); 
 
 @media (max-width: 720px) {
   /* 窄屏：图片面板改为顶部横幅 */
-  .image-panel { width: 100%; height: 30vh; bottom: auto; box-shadow: 0 14px 32px -10px transparent; }
-  body.has-image .image-panel { box-shadow: 0 14px 32px -10px rgba(15, 23, 42, 0.45); }
-  :root[data-theme='dark'] body.has-image .image-panel { box-shadow: 0 14px 32px -10px rgba(0, 0, 0, 0.65); }
+  .image-panel { width: 100%; height: 30vh; bottom: auto; border-right: 0; border-bottom: 1px solid transparent; box-shadow: 0 6px 14px -6px transparent; }
+  body.has-image .image-panel { box-shadow: 0 6px 14px -6px rgba(15, 23, 42, 0.55); border-bottom-color: var(--edge-line); }
+  :root[data-theme='dark'] body.has-image .image-panel { box-shadow: 0 6px 14px -6px rgba(0, 0, 0, 0.8); }
   body.has-image .main { padding-left: 16px; padding-top: calc(30vh + 48px); justify-content: flex-start; }
   body.has-image .search-wrap { width: min(640px, 88vw); }
   body.has-image .shortcuts { width: min(600px, 90vw); }

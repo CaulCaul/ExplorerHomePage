@@ -28,6 +28,10 @@
   const wordmarkEl = document.getElementById('wordmark');
   const glowToggle = document.getElementById('glow-toggle');
   const glowColor = document.getElementById('glow-color');
+  const glowSize = document.getElementById('glow-size');
+  const glowSizeVal = document.getElementById('glow-size-val');
+  const glowOpacity = document.getElementById('glow-opacity');
+  const glowOpacityVal = document.getElementById('glow-opacity-val');
   const imageToggle = document.getElementById('image-toggle');
   const btnPickImage = document.getElementById('btn-pick-image');
   const btnRemoveImage = document.getElementById('btn-remove-image');
@@ -48,6 +52,8 @@
   let toastTimer = null;
   let wordmarkTimer = null;
   let glowColorTimer = null;
+  let glowSizeTimer = null;
+  let glowOpacityTimer = null;
   let cropSaveTimer = null;
   let widthSaveTimer = null;
   let cropDragging = false;
@@ -383,6 +389,22 @@
       glowColorTimer = setTimeout(save, 300);
     });
 
+    glowSize.addEventListener('input', function () {
+      settings.glow.size = Number(glowSize.value);
+      glowSizeVal.textContent = settings.glow.size + 'px';
+      EHP.effects.applyGlow(settings.glow);
+      clearTimeout(glowSizeTimer);
+      glowSizeTimer = setTimeout(save, 400);
+    });
+
+    glowOpacity.addEventListener('input', function () {
+      settings.glow.opacity = glowOpacity.value / 100;
+      glowOpacityVal.textContent = glowOpacity.value + '%';
+      EHP.effects.applyGlow(settings.glow);
+      clearTimeout(glowOpacityTimer);
+      glowOpacityTimer = setTimeout(save, 400);
+    });
+
     bindImageControls();
     bindDataActions();
   }
@@ -397,6 +419,10 @@
     wordmarkInput.value = settings.wordmark;
     glowToggle.checked = settings.glow.enabled;
     glowColor.value = settings.glow.color;
+    glowSize.value = settings.glow.size;
+    glowSizeVal.textContent = settings.glow.size + 'px';
+    glowOpacity.value = Math.round(settings.glow.opacity * 100);
+    glowOpacityVal.textContent = Math.round(settings.glow.opacity * 100) + '%';
     imageToggle.checked = settings.imageEnabled;
     imgWidth.value = settings.imageWidth;
     imgWidthVal.textContent = settings.imageWidth + '%';

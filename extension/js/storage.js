@@ -23,7 +23,7 @@
     wordmark: 'EXPLORER HOME', // 签名文字，空字符串则隐藏
     theme: 'light',            // 'light' | 'dark'
     accent: '#6366f1',         // 强调色（#rrggbb）
-    glow: { enabled: false, color: '#6366f1' }, // 鼠标光晕
+    glow: { enabled: false, color: '#6366f1', size: 700, opacity: 0.5 }, // 鼠标光晕（size: px，200–1200；opacity: 0.1–1）
     imageEnabled: false,       // 左侧图片展示
     imageWidth: 33,            // 展示区域宽度（vw 百分比，15–50）
     imageCrop: { fx: 0.5, fy: 0.5, zoom: 1, iw: 0, ih: 0 } // 裁剪：焦点(0-1)+缩放(1-3)+原图尺寸
@@ -41,7 +41,9 @@
       accent: /^#[0-9a-f]{6}$/i.test(s.accent) ? s.accent : DEFAULT_SETTINGS.accent,
       glow: {
         enabled: !!g.enabled,
-        color: /^#[0-9a-f]{6}$/i.test(g.color) ? g.color : DEFAULT_SETTINGS.glow.color
+        color: /^#[0-9a-f]{6}$/i.test(g.color) ? g.color : DEFAULT_SETTINGS.glow.color,
+        size: Math.min(1200, Math.max(200, Math.round(num(g.size, 700)))),
+        opacity: Math.min(1, Math.max(0.1, num(g.opacity, 0.5)))
       },
       imageEnabled: !!s.imageEnabled,
       imageWidth: Math.min(50, Math.max(15, Math.round(num(s.imageWidth, 33)))),
