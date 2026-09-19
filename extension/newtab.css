@@ -83,7 +83,7 @@ button { font-family: inherit; }
   transform: rotate(30deg);
 }
 
-/* ---------- 网络状态角标（右下角，双行） ---------- */
+/* ---------- 网络状态角标（右下角，单气泡双行） ---------- */
 
 .net-panel {
   position: fixed;
@@ -92,28 +92,32 @@ button { font-family: inherit; }
   z-index: 50;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  align-items: flex-end;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  backdrop-filter: blur(10px);
 }
 
 .net-row {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 12px;
+  gap: 8px;
+  padding: 3px 8px;
   font-size: 12px;
   color: var(--text-dim);
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  backdrop-filter: blur(10px);
   cursor: pointer;
-  transition: color 0.15s;
+  border-radius: 8px;
+  transition: color 0.15s, background 0.15s;
 }
 
-.net-row:hover { color: var(--text); }
+.net-row:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
 
-.net-name { opacity: 0.8; user-select: none; }
+.net-name { width: 2.6em; user-select: none; }
 
 .net-dot {
   width: 8px;
@@ -123,11 +127,13 @@ button { font-family: inherit; }
   flex: none;
 }
 
-.net-text { min-width: 4em; text-align: left; }
+.net-text { min-width: 3.2em; text-align: right; }
 
 /* ---------- 主区域布局 ---------- */
 
 .main {
+  position: relative;
+  z-index: 1;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -302,6 +308,10 @@ button { font-family: inherit; }
 }
 
 .tile { position: relative; }
+
+.tile.dragging { opacity: 0.35; }
+
+.tile-link, .tile-icon img, .tile-title { -webkit-user-drag: none; }
 
 .tile-link {
   display: flex;
@@ -525,6 +535,58 @@ button.tile-link:hover {
 
 .set-actions { display: flex; gap: 10px; flex-wrap: wrap; padding: 6px 0; }
 
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* 开关（switch） */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  flex: none;
+}
+
+.switch input { opacity: 0; width: 0; height: 0; }
+
+.switch .slider {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--text) 20%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.switch .slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s;
+}
+
+.switch input:checked + .slider { background: var(--accent-strong); }
+.switch input:checked + .slider::before { transform: translateX(18px); }
+
+/* 颜色选择器 */
+#glow-color {
+  width: 40px;
+  height: 26px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#glow-color::-webkit-color-swatch-wrapper { padding: 2px; }
+#glow-color::-webkit-color-swatch { border: none; border-radius: 4px; }
+
 .set-hint {
   margin: 8px 0 4px;
   font-size: 12px;
@@ -648,7 +710,61 @@ button.tile-link:hover {
   box-shadow: var(--shadow);
 }
 
+/* ---------- 背景光晕与图片面板 ---------- */
+
+#glow {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 600px;
+  height: 600px;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 50%;
+  opacity: 0.22;
+  filter: blur(10px);
+}
+
+:root[data-theme='dark'] #glow { opacity: 0.3; }
+
+.image-panel {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 33vw;
+  z-index: 0;
+  display: none;
+  background-color: var(--bg2);
+  background-size: cover;
+  background-position: center;
+}
+
+/* 图片右缘渐隐，与页面背景融合 */
+.image-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right, transparent 72%, var(--bg1) 100%);
+}
+
+body.has-image .image-panel { display: block; }
+
+/* 内容整体右移：可用区域为右侧 2/3 并在其中居中 */
+body.has-image .main { padding-left: 33vw; }
+body.has-image .search-wrap { width: min(640px, 56vw); }
+body.has-image .shortcuts { width: min(600px, 56vw); }
+
 /* ---------- 响应式 ---------- */
+
+@media (max-width: 720px) {
+  /* 窄屏：图片面板改为顶部横幅 */
+  .image-panel { width: 100%; height: 30vh; bottom: auto; }
+  .image-panel::after { background: linear-gradient(to bottom, transparent 55%, var(--bg1) 100%); }
+  body.has-image .main { padding-left: 16px; padding-top: calc(30vh + 48px); justify-content: flex-start; }
+  body.has-image .search-wrap { width: min(640px, 88vw); }
+  body.has-image .shortcuts { width: min(600px, 90vw); }
+}
 
 @media (max-width: 480px) {
   .main { justify-content: flex-start; padding-top: 90px; }

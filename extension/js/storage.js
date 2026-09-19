@@ -12,7 +12,8 @@
     shortcuts: 'shortcuts',    // [{ id, title, url }]
     history: 'searchHistory',  // [{ q, engine, ts }] 新→旧
     iconCache: 'iconCache',    // { domain: dataURL }
-    settings: 'settings'       // { wordmark, theme, accent } 外观设置
+    settings: 'settings',      // { wordmark, theme, accent, glow, imageEnabled } 外观设置
+    bgImage: 'bgImage'         // 展示图片 dataURL（压缩后；不随导出）
   };
 
   const HISTORY_CAP = 1000;   // 最多保留 1000 条搜索历史
@@ -21,8 +22,26 @@
   const DEFAULT_SETTINGS = {
     wordmark: 'EXPLORER HOME', // 签名文字，空字符串则隐藏
     theme: 'light',            // 'light' | 'dark'
-    accent: '#6366f1'          // 强调色（#rrggbb）
+    accent: '#6366f1',         // 强调色（#rrggbb）
+    glow: { enabled: false, color: '#818cf8' }, // 鼠标光晕
+    imageEnabled: false        // 左侧图片展示
   };
+
+  /* 防御性清洗：兼容历史遗留/导入数据 */
+  function sanitizeSettings(s) {
+    s = s && typeof s === 'object' ? s : {};
+    const g = s.glow && typeof s.glow === 'object' ? s.glow : {};
+    return {
+      wordmark: typeof s.wordmark === 'string' ? s.wordmark.slice(0, 30) : DEFAULT_SETTINGS.wordmark,
+      theme: s.theme === 'dark' ? 'dark' : 'light',
+      accent: /^#[0-9a-f]{6}$/i.test(s.accent) ? s.accent : DEFAULT_SETTINGS.accent,
+      glow: {
+        enabled: !!g.enabled,
+        color: /^#[0-9a-f]{6}$/i.test(g.color) ? g.color : DEFAULT_SETTINGS.glow.color
+      },
+      imageEnabled: !!s.imageEnabled
+    };
+  }
 
   const DEFAULT_SHORTCUTS = [
     { id: 'preset-bing', title: '必应', url: 'https://www.bing.com/' },
@@ -116,12 +135,7 @@
         return { q: h.q, engine: h.engine === 'google' ? 'google' : 'bing', ts: Number(h.ts) || Date.now() };
       })
       .slice(0, HISTORY_CAP);
-    const s = obj.settings && typeof obj.settings === 'object' ? obj.settings : {};
-    const settings = {
-      wordmark: typeof s.wordmark === 'string' ? s.wordmark.slice(0, 30) : DEFAULT_SETTINGS.wordmark,
-      theme: s.theme === 'dark' ? 'dark' : 'light',
-      accent: /^#[0-9a-f]{6}$/i.test(s.accent) ? s.accent : DEFAULT_SETTINGS.accent
-    };
+    const settings = sanitizeSettings(obj.settings);
     await chrome.storage.local.set({
       shortcuts: shortcuts,
       searchHistory: history,
@@ -136,6 +150,7 @@
     ICON_CACHE_CAP: ICON_CACHE_CAP,
     DEFAULT_SHORTCUTS: DEFAULT_SHORTCUTS,
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
+    sanitizeSettings: sanitizeSettings,
     getAll: getAll,
     get: get,
     set: set,

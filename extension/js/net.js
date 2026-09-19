@@ -122,9 +122,7 @@
     function (level, latency) {
       if (level === 'offline') return '离线';
       if (level === 'unknown') return '检测中…';
-      if (level === 'good') return '在线 · ' + fmt(latency);
-      if (level === 'fair') return '一般 · ' + fmt(latency);
-      return '较慢 · ' + fmt(latency);
+      return fmt(latency);
     }
   );
 
@@ -136,8 +134,7 @@
     function (level, latency) {
       if (level === 'offline') return '不可达';
       if (level === 'unknown') return '检测中…';
-      if (level === 'good') return '可达 · ' + fmt(latency);
-      return '较慢 · ' + fmt(latency);
+      return fmt(latency);
     }
   );
 

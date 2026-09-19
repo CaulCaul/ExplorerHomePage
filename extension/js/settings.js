@@ -1,4 +1,4 @@
-/* Explorer Home Page — 设置抽屉：主题 / 强调色 / 签名文字 / 数据管理
+/* Explorer Home Page — 设置抽屉：主题 / 强调色 / 签名 / 光晕 / 图片展示 / 数据管理
  * 主题通过 :root[data-theme] 变量切换（默认浅色）；
  * 强调色由 JS 注入 --accent-strong / --accent（后者用 color-mix 派生浅色）。
  */
@@ -25,6 +25,12 @@
   const swatchWrap = document.getElementById('accent-swatches');
   const wordmarkInput = document.getElementById('wordmark-input');
   const wordmarkEl = document.getElementById('wordmark');
+  const glowToggle = document.getElementById('glow-toggle');
+  const glowColor = document.getElementById('glow-color');
+  const imageToggle = document.getElementById('image-toggle');
+  const btnPickImage = document.getElementById('btn-pick-image');
+  const btnRemoveImage = document.getElementById('btn-remove-image');
+  const imageFile = document.getElementById('image-file');
   const btnExport = document.getElementById('btn-export');
   const btnImport = document.getElementById('btn-import');
   const btnClear = document.getElementById('btn-clear-history');
@@ -33,6 +39,7 @@
   let settings = EHP.storage.DEFAULT_SETTINGS;
   let toastTimer = null;
   let wordmarkTimer = null;
+  let glowColorTimer = null;
 
   /* ---------- 应用到页面 ---------- */
 
@@ -86,7 +93,7 @@
     toastTimer = setTimeout(function () { t.hidden = true; }, 2600);
   }
 
-  /* ---------- 数据操作（自页脚迁移至此） ---------- */
+  /* ---------- 数据操作 ---------- */
 
   function backupName() {
     const d = new Date();
@@ -212,26 +219,73 @@
       wordmarkTimer = setTimeout(save, 300);
     });
 
+    /* 鼠标光晕：开关 + 颜色 */
+    glowToggle.addEventListener('change', function () {
+      settings.glow.enabled = glowToggle.checked;
+      save();
+      EHP.effects.applyGlow(settings.glow);
+    });
+
+    glowColor.addEventListener('input', function () {
+      settings.glow.color = glowColor.value;
+      EHP.effects.applyGlow(settings.glow);
+      clearTimeout(glowColorTimer);
+      glowColorTimer = setTimeout(save, 300);
+    });
+
+    /* 图片展示：开关 + 选择/移除 */
+    imageToggle.addEventListener('change', async function () {
+      settings.imageEnabled = imageToggle.checked;
+      await save();
+      await EHP.effects.applyImage(settings.imageEnabled);
+      if (settings.imageEnabled) {
+        const src = await EHP.storage.get(KEY.bgImage, '');
+        if (!src) imageFile.click(); /* 首次开启自动引导选图 */
+      }
+    });
+
+    btnPickImage.addEventListener('click', function () {
+      imageFile.click();
+    });
+
+    imageFile.addEventListener('change', async function () {
+      const f = imageFile.files && imageFile.files[0];
+      imageFile.value = '';
+      if (!f) return;
+      try {
+        await EHP.effects.setImage(f);
+        settings.imageEnabled = true;
+        imageToggle.checked = true;
+        await save();
+        showToast('展示图片已更新');
+      } catch (err) {
+        showToast('图片处理失败：' + (err && err.message ? err.message : err));
+      }
+    });
+
+    armConfirm(btnRemoveImage, '移除', async function () {
+      await EHP.effects.removeImage();
+      settings.imageEnabled = false;
+      imageToggle.checked = false;
+      await save();
+      showToast('已移除展示图片');
+    });
+
     bindDataActions();
   }
 
-  /* 载入时清洗，防御性处理历史遗留/导入数据 */
-  function sanitize(s) {
-    s = s && typeof s === 'object' ? s : {};
-    return {
-      wordmark: typeof s.wordmark === 'string' ? s.wordmark.slice(0, 30) : EHP.storage.DEFAULT_SETTINGS.wordmark,
-      theme: s.theme === 'dark' ? 'dark' : 'light',
-      accent: /^#[0-9a-f]{6}$/i.test(s.accent) ? s.accent : EHP.storage.DEFAULT_SETTINGS.accent
-    };
-  }
-
   async function init() {
-    settings = sanitize(await EHP.storage.get(KEY.settings, {}));
+    settings = EHP.storage.sanitizeSettings(await EHP.storage.get(KEY.settings, {}));
     applyAll();
     bind();
     renderThemeSwitch();
     buildSwatches();
     wordmarkInput.value = settings.wordmark;
+    glowToggle.checked = settings.glow.enabled;
+    glowColor.value = settings.glow.color;
+    imageToggle.checked = settings.imageEnabled;
+    EHP.effects.applyGlow(settings.glow);
+    EHP.effects.applyImage(settings.imageEnabled);
   }
 
   EHP.settings = { init: init, close: closeDrawer };

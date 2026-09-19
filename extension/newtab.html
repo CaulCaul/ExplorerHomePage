@@ -7,6 +7,11 @@
   <link rel="stylesheet" href="newtab.css" />
 </head>
 <body>
+  <!-- 左侧图片展示面板 -->
+  <div class="image-panel" id="image-panel"></div>
+  <!-- 跟随鼠标的背景光晕 -->
+  <div id="glow" hidden></div>
+
   <!-- 设置入口（右上角） -->
   <button id="settings-btn" class="settings-btn" type="button" title="设置">
     <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
@@ -35,16 +40,16 @@
     <section class="shortcuts" id="shortcuts" aria-label="快捷方式"></section>
   </main>
 
-  <!-- 网络状态角标（右下角，国内/国外双通道） -->
+  <!-- 网络状态角标（右下角，单气泡双行：国内/国外） -->
   <div class="net-panel" id="net-panel">
     <div class="net-row" id="net-domestic" title="国内网站连通性，点击重新检测">
-      <span class="net-name">国内</span>
       <span class="net-dot" id="net-dot-domestic"></span>
+      <span class="net-name">国内</span>
       <span class="net-text" id="net-text-domestic">检测中…</span>
     </div>
     <div class="net-row" id="net-foreign" title="国外网站（Google 服务）连通性，点击重新检测">
-      <span class="net-name">国外</span>
       <span class="net-dot" id="net-dot-foreign"></span>
+      <span class="net-name">国外</span>
       <span class="net-text" id="net-text-foreign">检测中…</span>
     </div>
   </div>
@@ -76,6 +81,25 @@
           <span class="set-label">签名文字 <em>留空则隐藏</em></span>
           <input id="wordmark-input" type="text" maxlength="30" placeholder="例如：EXPLORER HOME" />
         </div>
+        <div class="set-row">
+          <span class="set-label">鼠标光晕</span>
+          <label class="switch"><input type="checkbox" id="glow-toggle" /><span class="slider"></span></label>
+        </div>
+        <div class="set-row">
+          <span class="set-label">光晕颜色</span>
+          <input type="color" id="glow-color" title="光晕颜色" />
+        </div>
+        <div class="set-row">
+          <span class="set-label">图片展示 <em>左侧约 1/3 区域</em></span>
+          <label class="switch"><input type="checkbox" id="image-toggle" /><span class="slider"></span></label>
+        </div>
+        <div class="set-row">
+          <span class="set-label">展示图片 <em>仅保存在本机</em></span>
+          <div class="btn-group">
+            <button type="button" class="btn ghost" id="btn-pick-image">选择图片</button>
+            <button type="button" class="btn ghost danger-text" id="btn-remove-image">移除</button>
+          </div>
+        </div>
       </section>
       <section class="set-group">
         <h3>数据</h3>
@@ -84,12 +108,13 @@
           <button type="button" class="btn ghost" id="btn-import">导入数据</button>
           <button type="button" class="btn ghost danger-text" id="btn-clear-history">清空历史</button>
         </div>
-        <p class="set-hint">导出的 JSON 备份可放入仓库 data/ 目录（已被 git 忽略）；导入会覆盖当前快捷方式、历史与外观设置。</p>
+        <p class="set-hint">导出的 JSON 备份可放入仓库 data/ 目录（已被 git 忽略）；导入会覆盖当前快捷方式、历史与外观设置（展示图片除外）。</p>
         <input type="file" id="import-file" accept="application/json,.json" hidden />
+        <input type="file" id="image-file" accept="image/*" hidden />
       </section>
       <section class="set-group">
         <h3>关于</h3>
-        <p class="set-hint">Explorer Home v0.1.1 · 离线优先的新标签页扩展</p>
+        <p class="set-hint">Explorer Home v0.2.0 · 离线优先的新标签页扩展</p>
       </section>
     </div>
   </aside>
@@ -122,6 +147,7 @@
   <script src="js/net.js" defer></script>
   <script src="js/search.js" defer></script>
   <script src="js/shortcuts.js" defer></script>
+  <script src="js/effects.js" defer></script>
   <script src="js/settings.js" defer></script>
   <script src="js/main.js" defer></script>
 </body>

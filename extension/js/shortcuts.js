@@ -21,12 +21,14 @@
 
   let shortcuts = [];
   let editingId = null;   // null = 添加模式
+  let dragEl = null;      // 拖拽排序中的磁贴
   const inFlight = {};    // 域名级并发去重
 
   async function init() {
     shortcuts = await EHP.storage.get(KEY.shortcuts, []);
     render();
     bindModal();
+    bindDrag();
   }
 
   /* ---------- 渲染 ---------- */
@@ -40,6 +42,8 @@
   function tile(sc) {
     const el = document.createElement('div');
     el.className = 'tile';
+    el.dataset.id = sc.id;
+    el.draggable = true;
 
     const a = document.createElement('a');
     a.href = sc.url;
@@ -154,6 +158,51 @@
     } finally {
       delete inFlight[domain];
     }
+  }
+
+  /* ---------- 拖拽排序（HTML5 DnD，桌面端） ---------- */
+
+  function bindDrag() {
+    grid.addEventListener('dragstart', function (e) {
+      const t = e.target.closest('.tile[data-id]');
+      if (!t) return;
+      dragEl = t;
+      t.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', t.dataset.id); } catch (err) { /* IE 兼容，可忽略 */ }
+    });
+
+    grid.addEventListener('dragover', function (e) {
+      if (!dragEl) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const target = e.target.closest('.tile[data-id]');
+      if (!target || target === dragEl) return;
+      const rect = target.getBoundingClientRect();
+      const after = (e.clientX - rect.left) > rect.width / 2;
+      grid.insertBefore(dragEl, after ? target.nextSibling : target);
+    });
+
+    grid.addEventListener('dragend', function () {
+      if (!dragEl) return;
+      dragEl.classList.remove('dragging');
+      dragEl = null;
+      persistOrder();
+    });
+  }
+
+  /* 按当前 DOM 顺序回写快捷方式数组 */
+  async function persistOrder() {
+    const order = Array.prototype.map.call(
+      grid.querySelectorAll('.tile[data-id]'),
+      function (el) { return el.dataset.id; }
+    );
+    const map = {};
+    shortcuts.forEach(function (s) { map[s.id] = s; });
+    shortcuts = order
+      .map(function (id) { return map[id]; })
+      .filter(Boolean);
+    await EHP.storage.set(KEY.shortcuts, shortcuts);
   }
 
   /* ---------- 增删改弹窗 ---------- */
