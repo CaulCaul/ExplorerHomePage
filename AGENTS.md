@@ -28,8 +28,9 @@
 | 图标策略：DDG 图标服务 → Google s2 → 首字母色块；抓到后以 dataURL 缓存 | 保证断网时图标仍可显示 |
 | 右下角双通道网络角标：国内（msft/baidu/bing）与国外（google generate_204 / gstatic）分行探测 | 用户需要分别了解国内外可达性；国外以 Google 可达性为准，直接服务 Bing/Google 引擎选择 |
 | 浅色为默认主题，深色可选；强调色与签名在设置页配置，通过 CSS 变量注入（--accent 用 color-mix 派生） | 用户反馈深色背景下部分网站图标看不清 |
-| 图片展示为左侧 33vw 固定面板（body.has-image 时内容右移居中），本地图片经 canvas 压缩（长边 1920 / JPEG 85%）存独立 bgImage 键 | chrome.storage.local 有 10MB 上限且导出备份不应含图片；分区展示避免整页背景图被内容遮挡（用户明确不要整页背景） |
-| 光晕用单个 rAF 循环对鼠标位置 lerp 插值渲染，随开关启停 | 流畅跟随且关闭时零开销 |
+| 图片展示为左侧固定面板：宽度经 `--img-w` 变量（设置页 15%–50% 可调）；开合用 translateX 滑动动画；右缘细阴影（--edge-shadow，随主题变化）替代了早期渐变边缘；本地图片经 canvas 高质量压缩（imageSmoothingQuality='high'，长边 2560 / JPEG 90%）存独立 bgImage 键 | 用户反馈过「渐变边缘不要、要阴影」「高清图展示模糊」；chrome.storage 10MB 上限且导出不应含图片 |
+| 图片裁剪用「焦点百分比定位」：bgSize 由 JS 按 cover×zoom 换算为 px，bgPosition 用 fx/fy 百分比，面板与设置页预览共用 `EHP.effects.bgLayout` | 百分比定位天然适配面板任意尺寸/宽度变化；拖动 = 改 fx/fy（方向取反使画面跟随鼠标），滚轮 = 改 zoom（1–3） |
+| 光晕：单个 rAF 循环 lerp 跟随；浅色主题 mix-blend-mode: multiply、深色 screen，透明度 ~0.5 | 曾因 0.22 低透明度浅色渐变在浅背景下不可见（用户反馈），混合模式保证任何背景可见 |
 
 ## 文件地图
 
@@ -48,7 +49,7 @@ extension/                ★ 扩展根目录（安装时「加载解压缩的�
   js/net.js               网络探测：国内/国外双通道，多探针轮换、延迟分级、右下角单气泡双行角标
   js/search.js            搜索：引擎切换/在线联想/本地历史候选/键盘导航
   js/shortcuts.js         快捷方式：渲染/增删改弹窗/拖拽排序/favicon 抓取缓存
-  js/effects.js           页面效果：鼠标跟随光晕（rAF lerp）+ 左侧图片展示面板（canvas 压缩存储）
+  js/effects.js           页面效果：鼠标光晕（rAF lerp + 混合模式）+ 图片面板（高质量压缩、焦点裁剪、宽度变量/滑动动画）
   js/settings.js          设置抽屉：主题/强调色/签名/光晕/图片 + 数据导入导出/清空历史
   js/main.js              启动接线：ensureDefaults → settings（先应用主题）→ 各模块 init → 快捷键
 ```
@@ -63,7 +64,7 @@ extension/                ★ 扩展根目录（安装时「加载解压缩的�
 | `shortcuts` | `[{ id, title, url }]` | url 一定是带 http(s):// 的绝对地址 |
 | `searchHistory` | `[{ q, engine, ts }]` | 新→旧，上限 1000，相同关键词去重置顶 |
 | `iconCache` | `{ domain: dataURL }` | favicon 缓存，上限 150，FIFO 淘汰 |
-| `settings` | `{ wordmark, theme, accent, glow: { enabled, color }, imageEnabled }` | 外观设置；sanitizeSettings 清洗，settings.js 注入 CSS 变量 |
+| `settings` | `{ wordmark, theme, accent, glow: { enabled, color }, imageEnabled, imageWidth(15–50), imageCrop: { fx, fy, zoom(1–3), iw, ih } }` | 外观设置；sanitizeSettings 清洗并钳位，settings.js 注入 CSS 变量 |
 | `bgImage` | `dataURL`（JPEG） | 展示图片，压缩后存储；**不随导出/导入**，换机需重选 |
 
 首次运行由 `ensureDefaults()` 懒初始化（无 background service worker，刻意保持零后台）。
@@ -89,7 +90,8 @@ extension/                ★ 扩展根目录（安装时「加载解压缩的�
 7. `color-mix()` 与 `:root[data-theme]` 变量切换依赖较新 Chromium（Edge 111+），当前目标环境可接受；
 8. 主题/强调色必须在 boot 最早阶段应用（`settings.init` 先于渲染模块执行），避免加载闪色；
 9. HTML5 拖拽排序不支持触屏（桌面 Edge 是主场景，可接受）；磁贴内链接/图片需 `-webkit-user-drag: none` 防止拖出链接；
-10. 本地图片必须先 canvas 压缩再写入存储（长边 1920/JPEG 85%），否则可能撑爆 chrome.storage.local 配额。
+10. 本地图片必须先 canvas 压缩再写入存储，且 `imageSmoothingQuality='high'`（默认低质量双线性会让大图缩小明显模糊）；长边 2560 / JPEG 90%；
+11. 裁剪预览的滚轮监听必须 `{ passive: false }` 才能 preventDefault 阻止抽屉滚动；`--img-w` 改变后 bgSize 的 px 值需在 rAF 中重算（面板宽度有过渡动画）。
 
 ## 开发调试循环
 
@@ -101,7 +103,7 @@ extension/                ★ 扩展根目录（安装时「加载解压缩的�
 ## 当前状态与路线图
 
 - **M1**：双引擎搜索 + 在线/历史候选、快捷方式增删改 + 图标缓存、导出/导入、安装教学——已实现并交付；
-- **M2（进行中）**：已完成双通道角标（合并为单气泡双行：圆点+地域+延迟）、设置抽屉（主题/强调色/签名/光晕/图片/数据管理）、浅色默认主题、快捷方式拖拽排序、鼠标光晕、左侧图片展示面板；剩余：候选关键词高亮、可配置探针间隔/历史上限；
+- **M2（进行中）**：已完成双通道角标（单气泡双行）、设置抽屉（主题/强调色/签名/光晕/图片/数据管理）、浅色默认主题、拖拽排序、鼠标光晕（混合模式修复可见性）、图片展示（模糊修复、焦点裁剪、宽度 15%–50% 可调、右缘阴影、开合滑动动画）；剩余：候选关键词高亮、可配置探针间隔/历史上限；
 - M3（候选）：跨设备同步（`chrome.storage.sync` 先做 spike，或轻量自托管后端）——用户已明确当前不需要账号体系。
 
 ## 变更习惯

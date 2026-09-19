@@ -18,6 +18,7 @@
   --offline: #dc2626;
   --icon-chip: #ffffff;
   --shadow: 0 18px 50px rgba(15, 23, 42, 0.16);
+  --edge-shadow: 14px 0 32px -10px rgba(15, 23, 42, 0.45);
   --accent: #8b93f4;
   --accent-strong: #6366f1;
 }
@@ -37,6 +38,7 @@
   --offline: #f87171;
   --icon-chip: rgba(255, 255, 255, 0.92);
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  --edge-shadow: 14px 0 32px -10px rgba(0, 0, 0, 0.65);
 }
 
 * { box-sizing: border-box; }
@@ -140,6 +142,7 @@ button { font-family: inherit; }
   align-items: center;
   justify-content: center;
   padding: 56px 16px 90px;
+  transition: padding-left 0.3s ease; /* 图片面板开合/宽度变化时内容平滑跟随 */
 }
 
 .wordmark {
@@ -587,6 +590,47 @@ button.tile-link:hover {
 #glow-color::-webkit-color-swatch-wrapper { padding: 2px; }
 #glow-color::-webkit-color-swatch { border: none; border-radius: 4px; }
 
+/* 滑杆行（展示宽度 / 裁剪缩放） */
+.range-row { display: flex; align-items: center; gap: 10px; width: 100%; }
+
+.range-label { font-size: 12px; color: var(--text-dim); flex: none; }
+
+.range-val { font-size: 12px; color: var(--text-dim); min-width: 3.5em; text-align: right; }
+
+input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  height: 18px;
+  accent-color: var(--accent-strong);
+  cursor: pointer;
+}
+
+/* 裁剪预览框 */
+.crop-preview {
+  position: relative;
+  width: 100%;
+  height: 150px;
+  margin: 4px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: color-mix(in srgb, var(--text) 6%, transparent);
+  background-repeat: no-repeat;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.crop-preview.grabbing { cursor: grabbing; }
+
+.crop-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
 .set-hint {
   margin: 8px 0 4px;
   font-size: 12px;
@@ -712,55 +756,60 @@ button.tile-link:hover {
 
 /* ---------- 背景光晕与图片面板 ---------- */
 
+/* 光晕：混合模式保证任何主题背景下可见（浅色 multiply / 深色 screen） */
 #glow {
   position: fixed;
   top: 0;
   left: 0;
-  width: 600px;
-  height: 600px;
+  width: 700px;
+  height: 700px;
   z-index: 0;
   pointer-events: none;
   border-radius: 50%;
-  opacity: 0.22;
-  filter: blur(10px);
+  opacity: 0.5;
+  filter: blur(6px);
+  mix-blend-mode: multiply;
 }
 
-:root[data-theme='dark'] #glow { opacity: 0.3; }
+:root[data-theme='dark'] #glow {
+  mix-blend-mode: screen;
+  opacity: 0.55;
+}
 
 .image-panel {
   position: fixed;
   left: 0;
   top: 0;
   bottom: 0;
-  width: 33vw;
+  width: var(--img-w, 33vw);
   z-index: 0;
-  display: none;
   background-color: var(--bg2);
   background-size: cover;
   background-position: center;
+  background-repeat: no-repeat;
+  transform: translateX(-101%);
+  box-shadow: 14px 0 32px -10px transparent;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, width 0.25s ease;
 }
 
-/* 图片右缘渐隐，与页面背景融合 */
-.image-panel::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to right, transparent 72%, var(--bg1) 100%);
+/* 开启：滑入 + 右缘细阴影（图片在内容区上层的视觉效果） */
+body.has-image .image-panel {
+  transform: none;
+  box-shadow: var(--edge-shadow);
 }
 
-body.has-image .image-panel { display: block; }
-
-/* 内容整体右移：可用区域为右侧 2/3 并在其中居中 */
-body.has-image .main { padding-left: 33vw; }
-body.has-image .search-wrap { width: min(640px, 56vw); }
-body.has-image .shortcuts { width: min(600px, 56vw); }
+/* 内容整体右移：在图片右侧的剩余区域中居中 */
+body.has-image .main { padding-left: var(--img-w, 33vw); }
+body.has-image .search-wrap { width: min(640px, calc(88vw - var(--img-w, 33vw))); }
+body.has-image .shortcuts { width: min(600px, calc(90vw - var(--img-w, 33vw))); }
 
 /* ---------- 响应式 ---------- */
 
 @media (max-width: 720px) {
   /* 窄屏：图片面板改为顶部横幅 */
-  .image-panel { width: 100%; height: 30vh; bottom: auto; }
-  .image-panel::after { background: linear-gradient(to bottom, transparent 55%, var(--bg1) 100%); }
+  .image-panel { width: 100%; height: 30vh; bottom: auto; box-shadow: 0 14px 32px -10px transparent; }
+  body.has-image .image-panel { box-shadow: 0 14px 32px -10px rgba(15, 23, 42, 0.45); }
+  :root[data-theme='dark'] body.has-image .image-panel { box-shadow: 0 14px 32px -10px rgba(0, 0, 0, 0.65); }
   body.has-image .main { padding-left: 16px; padding-top: calc(30vh + 48px); justify-content: flex-start; }
   body.has-image .search-wrap { width: min(640px, 88vw); }
   body.has-image .shortcuts { width: min(600px, 90vw); }
