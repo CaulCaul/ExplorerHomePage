@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>新标签页</title>
+  <link rel="stylesheet" href="newtab.css" />
+</head>
+<body>
+  <!-- 设置入口（右上角） -->
+  <button id="settings-btn" class="settings-btn" type="button" title="设置">
+    <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+  </button>
+
+  <main class="main">
+    <div class="wordmark" id="wordmark">EXPLORER&nbsp;HOME</div>
+
+    <section class="search-area" aria-label="搜索">
+      <div class="seg" id="engine-switch" title="切换搜索引擎">
+        <button type="button" data-engine="bing">必应</button>
+        <button type="button" data-engine="google">Google</button>
+      </div>
+      <div class="search-wrap">
+        <div class="search-box">
+          <input id="search-input" type="text" autocomplete="off" spellcheck="false"
+                 placeholder="输入关键词搜索，↑↓ 选择候选，回车打开" />
+          <button id="search-btn" type="button" title="搜索">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
+          </button>
+        </div>
+        <ul class="suggestions" id="suggestions" hidden></ul>
+      </div>
+    </section>
+
+    <section class="shortcuts" id="shortcuts" aria-label="快捷方式"></section>
+  </main>
+
+  <!-- 网络状态角标（右下角，国内/国外双通道） -->
+  <div class="net-panel" id="net-panel">
+    <div class="net-row" id="net-domestic" title="国内网站连通性，点击重新检测">
+      <span class="net-name">国内</span>
+      <span class="net-dot" id="net-dot-domestic"></span>
+      <span class="net-text" id="net-text-domestic">检测中…</span>
+    </div>
+    <div class="net-row" id="net-foreign" title="国外网站（Google 服务）连通性，点击重新检测">
+      <span class="net-name">国外</span>
+      <span class="net-dot" id="net-dot-foreign"></span>
+      <span class="net-text" id="net-text-foreign">检测中…</span>
+    </div>
+  </div>
+
+  <!-- 设置抽屉 -->
+  <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <h2>设置</h2>
+      <button id="drawer-close" class="icon-btn" type="button" title="关闭">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body">
+      <section class="set-group">
+        <h3>外观</h3>
+        <div class="set-row">
+          <span class="set-label">主题</span>
+          <div class="seg" id="theme-switch">
+            <button type="button" data-theme-value="light">浅色</button>
+            <button type="button" data-theme-value="dark">深色</button>
+          </div>
+        </div>
+        <div class="set-row">
+          <span class="set-label">强调色</span>
+          <div class="swatches" id="accent-swatches"></div>
+        </div>
+        <div class="set-row col">
+          <span class="set-label">签名文字 <em>留空则隐藏</em></span>
+          <input id="wordmark-input" type="text" maxlength="30" placeholder="例如：EXPLORER HOME" />
+        </div>
+      </section>
+      <section class="set-group">
+        <h3>数据</h3>
+        <div class="set-actions">
+          <button type="button" class="btn ghost" id="btn-export">导出数据</button>
+          <button type="button" class="btn ghost" id="btn-import">导入数据</button>
+          <button type="button" class="btn ghost danger-text" id="btn-clear-history">清空历史</button>
+        </div>
+        <p class="set-hint">导出的 JSON 备份可放入仓库 data/ 目录（已被 git 忽略）；导入会覆盖当前快捷方式、历史与外观设置。</p>
+        <input type="file" id="import-file" accept="application/json,.json" hidden />
+      </section>
+      <section class="set-group">
+        <h3>关于</h3>
+        <p class="set-hint">Explorer Home v0.1.1 · 离线优先的新标签页扩展</p>
+      </section>
+    </div>
+  </aside>
+
+  <!-- 添加/编辑快捷方式弹窗 -->
+  <div class="overlay" id="overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h2 id="modal-title">添加快捷方式</h2>
+      <label class="field">
+        <span>名称</span>
+        <input id="sc-name" type="text" maxlength="24" placeholder="例如：哔哩哔哩" />
+      </label>
+      <label class="field">
+        <span>网址</span>
+        <input id="sc-url" type="text" placeholder="例如：www.bilibili.com" />
+      </label>
+      <p class="error" id="sc-error" hidden></p>
+      <div class="modal-actions">
+        <button type="button" class="btn danger" id="sc-delete" hidden>删除</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" id="sc-cancel">取消</button>
+        <button type="button" class="btn primary" id="sc-save">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="js/storage.js" defer></script>
+  <script src="js/net.js" defer></script>
+  <script src="js/search.js" defer></script>
+  <script src="js/shortcuts.js" defer></script>
+  <script src="js/settings.js" defer></script>
+  <script src="js/main.js" defer></script>
+</body>
+</html>

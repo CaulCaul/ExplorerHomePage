@@ -1,0 +1,11 @@
+# 用户本地数据（导出的个人备份），不纳入版本库
+data/*
+!data/.gitkeep
+
+# 系统与编辑器杂项
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+.vscode/
+.idea/
