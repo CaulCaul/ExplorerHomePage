@@ -65,6 +65,7 @@
   }
 
   function renderSwitch() {
+    switchEl.dataset.active = engine; /* 驱动滑块滑动 */
     Array.prototype.forEach.call(switchEl.querySelectorAll('button'), function (b) {
       b.classList.toggle('active', b.dataset.engine === engine);
     });

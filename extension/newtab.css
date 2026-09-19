@@ -193,7 +193,60 @@ button { font-family: inherit; }
   color: #fff;
 }
 
-#engine-switch { margin-bottom: 14px; }
+/* 搜索框内：引擎切换（图标按钮 + 圆角方块滑块） */
+.engine-switch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: none;
+  margin-left: 7px;
+  padding: 3px;
+}
+
+.engine-switch button {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.15s;
+}
+
+.engine-switch button:hover { opacity: 0.8; }
+
+.engine-switch button.active { opacity: 1; }
+
+/* 当前引擎的圆角方块滑块，切换时滑动 */
+.engine-thumb {
+  position: absolute;
+  z-index: 0;
+  top: 3px;
+  left: 3px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent-strong) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-strong) 32%, transparent);
+  transition: transform 0.18s ease;
+  pointer-events: none;
+}
+
+.engine-switch[data-active='google'] .engine-thumb { transform: translateX(30px); }
+
+/* 引擎选择与输入框的短竖分割线 */
+.search-divider {
+  flex: none;
+  width: 1px;
+  height: 22px;
+  margin: 0 2px 0 8px;
+  background: var(--border);
+}
 
 .search-wrap {
   position: relative;
@@ -218,7 +271,7 @@ button { font-family: inherit; }
 #search-input {
   flex: 1;
   min-width: 0;
-  padding: 14px 18px;
+  padding: 14px 18px 14px 10px;
   font-size: 16px;
   color: var(--text);
   background: transparent;
@@ -393,10 +446,12 @@ a.tile-link:hover {
 
 .tile-edit:hover { filter: brightness(0.95); }
 
-/* 添加按钮（与其他磁贴同构：图标位 + 标题位，虚线只出现在图标框上） */
+/* 添加按钮（与其他磁贴同构：图标位 + 标题位，虚线只出现在图标框上）
+   注意：button 即使 display:flex 也不会撑满父容器，必须显式 width:100% */
 
 button.tile-link {
   border: 0;
+  width: 100%;
   background: transparent;
   cursor: pointer;
   color: var(--text-dim);

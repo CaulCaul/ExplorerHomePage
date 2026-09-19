@@ -1,6 +1,6 @@
 /* Explorer Home Page — 页面效果：鼠标跟随光晕 + 左侧图片展示面板
- * 光晕：rAF 循环 lerp 跟随；浅色主题 mix-blend-mode: multiply / 深色 screen，
- *       保证任何背景与颜色下可见（曾因低透明度浅色渐变不可见）。
+ * 光晕：直接跟随鼠标（零延迟；曾用 rAF lerp 插值，用户反馈有吸附延迟已移除）；
+ *       浅色主题 mix-blend-mode: multiply / 深色 screen，任何背景与颜色下可见。
  * 图片：canvas 高质量缩放（imageSmoothingQuality='high'，长边 2560 / JPEG 90%）；
  *       裁剪采用「焦点百分比定位」：background-size 按 cover×zoom 换算为 px，
  *       background-position 用 (fx, fy) 百分比——天然适配面板任意尺寸/宽度变化，
@@ -12,34 +12,27 @@
   const EHP = window.EHP;
   const KEY = EHP.storage.KEY;
 
-  /* ---------- 鼠标光晕 ---------- */
+  /* ---------- 鼠标光晕（直接跟随，零延迟） ---------- */
 
   const glowEl = document.getElementById('glow');
   let glowSize = 700; /* 可由设置调整，applyGlow 时更新 */
+  let mouseX = window.innerWidth / 2;
+  let mouseY = window.innerHeight / 2;
 
   function clampNum(v, min, max, d) {
     v = Number(v);
     if (!isFinite(v)) v = d;
     return Math.min(max, Math.max(min, v));
   }
-  let targetX = window.innerWidth / 2;
-  let targetY = window.innerHeight / 2;
-  let curX = targetX;
-  let curY = targetY;
-  let rafId = null;
 
   window.addEventListener('mousemove', function (e) {
-    targetX = e.clientX;
-    targetY = e.clientY;
+    if (glowEl.hidden) return;
+    /* 直接定位到当前鼠标位置，不做插值，消除跟随延迟 */
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    glowEl.style.transform = 'translate3d(' + (mouseX - glowSize / 2) + 'px,' +
+      (mouseY - glowSize / 2) + 'px,0)';
   });
-
-  function loop() {
-    curX += (targetX - curX) * 0.14;
-    curY += (targetY - curY) * 0.14;
-    glowEl.style.transform = 'translate3d(' + (curX - glowSize / 2) + 'px,' +
-      (curY - glowSize / 2) + 'px,0)';
-    rafId = requestAnimationFrame(loop);
-  }
 
   function applyGlow(g) {
     const enabled = !!(g && g.enabled);
@@ -51,10 +44,8 @@
       glowEl.style.setProperty('--glow-o', clampNum(g.opacity, 0.1, 1, 0.5));
       glowEl.style.background = 'radial-gradient(circle, ' +
         (g.color || '#6366f1') + ' 0%, transparent 62%)';
-      if (rafId === null) rafId = requestAnimationFrame(loop);
-    } else if (rafId !== null) {
-      cancelAnimationFrame(rafId);
-      rafId = null;
+      glowEl.style.transform = 'translate3d(' + (mouseX - glowSize / 2) + 'px,' +
+        (mouseY - glowSize / 2) + 'px,0)';
     }
   }
 
