@@ -26,7 +26,7 @@
 | 网络探测用 HTTP 探针轮询，不用 `navigator.onLine` | onLine 只反映网卡连接，会出现「连着路由器但断网」的误报 |
 | 联想接口降级链：选中引擎 → 备用引擎 → 仅本地历史 | 联想 API 均为非官方接口，且 Google 端点在国内可能不可达 |
 | 图标策略：DDG 图标服务 → Google s2 → 首字母色块；抓到后以 dataURL 缓存 | 保证断网时图标仍可显示 |
-| 右下角双通道网络角标：国内（msft/baidu/bing）与国外（google generate_204 / gstatic）分行探测 | 用户需要分别了解国内外可达性；国外以 Google 可达性为准，直接服务 Bing/Google 引擎选择 |
+| 右下角双通道网络角标：国内（msft/baidu/bing）与国外（仅 www.google.com 同域端点：generate_204 → favicon）分行探测；一轮内全部探针失败立即显示离线/不可达 | 用户需要分别了解国内外可达性；gstatic 在用户网络可达但 Google 主站不可达，曾造成「国外可达」误报（v1.0.1 移除）；新标签页每次从「检测中」开始，双轮去抖曾致断网时长时间停留「检测中」（v1.0.1 改单轮判定，超时 3s→2s） |
 | 浅色为默认主题，深色可选；强调色与签名在设置页配置，通过 CSS 变量注入（--accent 用 color-mix 派生） | 用户反馈深色背景下部分网站图标看不清 |
 | 图片展示为左侧固定面板：宽度经 `--img-w` 变量（设置页 15%–50% 可调）；开合用 translateX 滑动动画；右缘锐利细阴影 + 1px 描边（--edge-shadow / --edge-line，随主题变化）替代了早期渐变边缘（用户要求「更细、更深、稍微锐利」）；本地图片经 canvas 高质量压缩（imageSmoothingQuality='high'，长边 2560 / JPEG 90%）存独立 bgImage 键 | 用户反馈过「渐变边缘不要、要阴影」「高清图展示模糊」；chrome.storage 10MB 上限且导出不应含图片 |
 | 图片裁剪用「焦点百分比定位」：bgSize 由 JS 按 cover×zoom 换算为 px，bgPosition 用 fx/fy 百分比，面板与设置页预览共用 `EHP.effects.bgLayout` | 百分比定位天然适配面板任意尺寸/宽度变化；拖动 = 改 fx/fy（方向取反使画面跟随鼠标），滚轮 = 改 zoom（1–3） |
@@ -76,8 +76,8 @@ extension/                ★ 扩展根目录（安装时「加载解压缩的�
 | --- | --- | --- |
 | 联想-Google | `https://suggestqueries.google.com/complete/search?client=chrome&q=` | 换备用引擎再试，最终退到本地历史 |
 | 联想-Bing | `https://api.bing.com/osjson.aspx?query=` | 同上 |
-| 网络探针-国内 | msftconnecttest / baidu favicon / bing favicon | 轮换尝试，连续 2 次全失败才判离线 |
-| 网络探针-国外 | google generate_204 / gstatic generate_204 | 同上；全失败显示「不可达」 |
+| 网络探针-国内 | msftconnecttest / baidu favicon / bing favicon | 轮换尝试，一轮全失败即「离线」 |
+| 网络探针-国外 | www.google.com generate_204 / 同域 favicon.ico（**不用** gstatic 等其他 Google 域名） | 一轮全失败即「不可达」；gstatic 国内部分网络可达会造成误报 |
 | favicon | `https://icons.duckduckgo.com/ip3/{domain}.ico` → `https://www.google.com/s2/favicons?domain=` | 首字母色块兜底 |
 
 ## 已知坑（改代码前必读）
@@ -92,7 +92,9 @@ extension/                ★ 扩展根目录（安装时「加载解压缩的�
 8. 主题/强调色必须在 boot 最早阶段应用（`settings.init` 先于渲染模块执行），避免加载闪色；
 9. HTML5 拖拽排序不支持触屏（桌面 Edge 是主场景，可接受）；磁贴内链接/图片需 `-webkit-user-drag: none` 防止拖出链接；
 10. 本地图片必须先 canvas 压缩再写入存储，且 `imageSmoothingQuality='high'`（默认低质量双线性会让大图缩小明显模糊）；长边 2560 / JPEG 90%；
-11. 裁剪预览的滚轮监听必须 `{ passive: false }` 才能 preventDefault 阻止抽屉滚动；`--img-w` 改变后 bgSize 的 px 值需在 rAF 中重算（面板宽度有过渡动画）。
+11. 裁剪预览的滚轮监听必须 `{ passive: false }` 才能 preventDefault 阻止抽屉滚动；`--img-w` 改变后 bgSize 的 px 值需在 rAF 中重算（面板宽度有过渡动画）；
+12. 角标在**每个新标签页**都从「检测中」重新开始——离线判定必须一轮内完成（全探针失败即显示），不能用多轮去抖，否则断网时用户长时间看到「检测中」；
+13. 图片面板/主区的过渡动画要在初始加载时用 `body.boot-no-anim` 抑制（`applyImage` 的 `instant` 参数 + 双重 rAF 移除），动画只在用户交互切换时播放。
 
 ## 开发调试循环
 
@@ -104,7 +106,8 @@ extension/                ★ 扩展根目录（安装时「加载解压缩的�
 ## 当前状态与路线图
 
 - **M1**：双引擎搜索 + 在线/历史候选、快捷方式增删改 + 图标缓存、导出/导入、安装教学——已实现并交付；
-- **v1.0.0（当前发布）**：首个正式版本，含 M1 全部 + M2 功能集：双通道角标（单气泡双行）、设置抽屉（分区：外观/光晕/图片展示/数据/关于）、浅色默认主题、拖拽排序、鼠标光晕（混合模式修复可见性，大小/透明度可调，零延迟直跟）、图片展示（模糊修复、焦点裁剪、宽度 15%–50% 可调、右缘锐利阴影+描边、开合滑动动画）、添加按钮与磁贴统一风格（悬停背景等宽）、引擎选择器内嵌搜索框（图标+滑块+分割线；Bing/Google 图标为从网上下载的官方 SVG，来源 gilbarbara/logos（CC0，经 Iconify API 获取），Bing 为官方多色渐变 logo，渐变 id 加 bing- 前缀避免冲突）、搜索按钮内缩圆角与外框嵌套；产品定位描述统一为「浏览器主页扩展」；后续候选：候选关键词高亮、可配置探针间隔/历史上限；
+- **v1.0.0**：首个正式版本，含 M1 全部 + M2 功能集：双通道角标（单气泡双行）、设置抽屉（分区：外观/光晕/图片展示/数据/关于）、浅色默认主题、拖拽排序、鼠标光晕（混合模式修复可见性，大小/透明度可调，零延迟直跟）、图片展示（模糊修复、焦点裁剪、宽度 15%–50% 可调、右缘锐利阴影+描边、开合滑动动画）、添加按钮与磁贴统一风格（悬停背景等宽）、引擎选择器内嵌搜索框（图标+滑块+分割线；Bing/Google 图标为从网上下载的官方 SVG，来源 gilbarbara/logos（CC0，经 Iconify API 获取），Bing 为官方多色渐变 logo，渐变 id 加 bing- 前缀避免冲突）、搜索按钮内缩圆角与外框嵌套；产品定位描述统一为「浏览器主页扩展」；
+- **v1.0.1（当前）**：断网立即显示离线（单轮判定 + 超时 2s）；国外通道仅测 Google 主站（移除 gstatic 误报源，manifest 同步移除其 host 权限）；图片面板动画仅在交互切换时播放（boot-no-anim 抑制初始加载过渡）；后续候选：候选关键词高亮、可配置探针间隔/历史上限；
 - M3（候选）：跨设备同步（`chrome.storage.sync` 先做 spike，或轻量自托管后端）——用户已明确当前不需要账号体系。
 
 ## 变更习惯

@@ -1,8 +1,11 @@
 /* Explorer Home Page — 网络状态探测（国内/国外双通道）与右下角角标
  * 国内通道：msftconnecttest → baidu → bing 轮换（均为国内可达端点）。
- * 国外通道：google generate_204 → gstatic（衡量 Google 服务可达性，辅助 Bing/Google 引擎选择）。
+ * 国外通道：仅 www.google.com 同域端点（generate_204 → favicon）。
+ *   不用 gstatic 等其他 Google 域名——它们在国内部分网络可达，
+ *   但不代表 Google 主站/搜索可用，会造成误报（用户实测反馈）。
  * 策略：HTTP 探针轮询（不用 navigator.onLine，它只反映网卡状态）；
- *       连续 2 次全部失败才判定不可达，防止状态抖动。
+ *       一轮内全部探针失败即显示离线（轮完所有端点本身就是去抖），
+ *       恢复显示则仍以一次成功探针为准。
  */
 (function () {
   'use strict';
@@ -16,11 +19,11 @@
   ];
   const FOREIGN = [
     { url: 'https://www.google.com/generate_204', label: 'google' },
-    { url: 'https://www.gstatic.com/generate_204', label: 'gstatic' }
+    { url: 'https://www.google.com/favicon.ico', label: 'google-favicon' }
   ];
 
   const POLL_MS = 8000;    // 轮询间隔
-  const TIMEOUT_MS = 3000; // 单次探测超时
+  const TIMEOUT_MS = 2000; // 单次探测超时
 
   const COLORS = {
     good: 'var(--good)',
@@ -40,10 +43,9 @@
     return 'poor';
   }
 
-  /* 通用监视器：探针轮换 + 去抖 + 角标 UI 更新 */
+  /* 通用监视器：探针轮换 + 角标 UI 更新 */
   function createMonitor(probes, rowEl, dotEl, textEl, textOf) {
     let preferred = 0;   // 上次成功的探针下标
-    let failures = 0;    // 连续失败次数
     let checking = false;
 
     function update(level, latency) {
@@ -89,12 +91,10 @@
         }
         if (hit >= 0) {
           preferred = hit;
-          failures = 0;
           update(levelFromLatency(latency), latency);
         } else {
-          failures++;
-          if (failures >= 2) update('offline', null); /* 连续 2 次失败才判不可达 */
-          /* 单次失败：保持上一次显示，避免角标闪烁 */
+          /* 一轮内已尝试全部探针均失败 → 立即判定离线/不可达 */
+          update('offline', null);
         }
       } finally {
         checking = false;
@@ -102,12 +102,10 @@
     }
 
     function reset() {
-      failures = 0;
       update('unknown', null);
     }
 
     function offlineNow() {
-      failures = 2;
       update('offline', null);
     }
 

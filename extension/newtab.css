@@ -870,6 +870,10 @@ body.has-image .main { padding-left: var(--img-w, 33vw); }
 body.has-image .search-wrap { width: min(640px, calc(88vw - var(--img-w, 33vw))); }
 body.has-image .shortcuts { width: min(600px, calc(90vw - var(--img-w, 33vw))); }
 
+/* 初始加载抑制面板/内容过渡动画：滑动动画只在用户切换状态时播放 */
+body.boot-no-anim .image-panel,
+body.boot-no-anim .main { transition: none !important; }
+
 /* ---------- 响应式 ---------- */
 
 @media (max-width: 720px) {

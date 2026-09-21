@@ -78,12 +78,22 @@
     document.documentElement.style.setProperty('--img-w', pct + 'vw');
   }
 
-  async function applyImage(enabled, c, widthPct) {
+  async function applyImage(enabled, c, widthPct, instant) {
     if (widthPct) setWidthVar(widthPct);
     if (c) crop = c;
     const src = enabled ? ((await EHP.storage.get(KEY.bgImage, '')) || '') : '';
     panel.style.backgroundImage = src ? 'url("' + src + '")' : '';
+    /* instant=true：页面初始加载，抑制过渡动画让面板/内容直接就位；
+       滑动动画仅在用户切换开关、选图/移除等交互时播放 */
+    if (instant) document.body.classList.add('boot-no-anim');
     document.body.classList.toggle('has-image', !!(enabled && src));
+    if (instant) {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          document.body.classList.remove('boot-no-anim');
+        });
+      });
+    }
     requestAnimationFrame(layoutPanel);
   }
 

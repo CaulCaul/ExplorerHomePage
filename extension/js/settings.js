@@ -428,7 +428,7 @@
     imgWidthVal.textContent = settings.imageWidth + '%';
     refreshCropPreview();
     EHP.effects.applyGlow(settings.glow);
-    EHP.effects.applyImage(settings.imageEnabled, settings.imageCrop, settings.imageWidth);
+    EHP.effects.applyImage(settings.imageEnabled, settings.imageCrop, settings.imageWidth, true);
   }
 
   EHP.settings = { init: init, close: closeDrawer };
