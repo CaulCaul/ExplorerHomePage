@@ -21,6 +21,7 @@
 
   const DEFAULT_SETTINGS = {
     wordmark: 'EXPLORER HOME', // 签名文字，空字符串则隐藏
+    placeholder: 'What shall we explore?', // 搜索框提示语，空字符串恢复默认
     theme: 'light',            // 'light' | 'dark'
     accent: '#6366f1',         // 强调色（#rrggbb）
     glow: { enabled: false, color: '#6366f1', size: 700, opacity: 0.5 }, // 鼠标光晕（size: px，200–1200；opacity: 0.1–1）
@@ -37,6 +38,7 @@
     const num = function (v, d) { return typeof v === 'number' && isFinite(v) ? v : d; };
     return {
       wordmark: typeof s.wordmark === 'string' ? s.wordmark.slice(0, 30) : DEFAULT_SETTINGS.wordmark,
+      placeholder: typeof s.placeholder === 'string' ? s.placeholder.slice(0, 60) : DEFAULT_SETTINGS.placeholder,
       theme: s.theme === 'dark' ? 'dark' : 'light',
       accent: /^#[0-9a-f]{6}$/i.test(s.accent) ? s.accent : DEFAULT_SETTINGS.accent,
       glow: {

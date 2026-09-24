@@ -46,11 +46,14 @@
   const btnImport = document.getElementById('btn-import');
   const btnClear = document.getElementById('btn-clear-history');
   const fileInput = document.getElementById('import-file');
+  const placeholderInput = document.getElementById('placeholder-input');
+  const searchInput = document.getElementById('search-input');
 
   let settings = EHP.storage.DEFAULT_SETTINGS;
   let bgSrc = '';
   let toastTimer = null;
   let wordmarkTimer = null;
+  let placeholderTimer = null;
   let glowColorTimer = null;
   let glowSizeTimer = null;
   let glowOpacityTimer = null;
@@ -80,10 +83,16 @@
     wordmarkEl.hidden = !text;
   }
 
+  function applyPlaceholder() {
+    const text = (settings.placeholder || '').trim();
+    searchInput.placeholder = text || EHP.storage.DEFAULT_SETTINGS.placeholder;
+  }
+
   function applyAll() {
     applyTheme();
     applyAccent();
     applyWordmark();
+    applyPlaceholder();
   }
 
   async function save() {
@@ -375,6 +384,14 @@
       wordmarkTimer = setTimeout(save, 300);
     });
 
+    /* 搜索框提示语：即时预览，防抖写盘 */
+    placeholderInput.addEventListener('input', function () {
+      settings.placeholder = placeholderInput.value;
+      applyPlaceholder();
+      clearTimeout(placeholderTimer);
+      placeholderTimer = setTimeout(save, 300);
+    });
+
     /* 鼠标光晕：开关 + 颜色 */
     glowToggle.addEventListener('change', function () {
       settings.glow.enabled = glowToggle.checked;
@@ -417,6 +434,7 @@
     renderThemeSwitch();
     buildSwatches();
     wordmarkInput.value = settings.wordmark;
+    placeholderInput.value = settings.placeholder;
     glowToggle.checked = settings.glow.enabled;
     glowColor.value = settings.glow.color;
     glowSize.value = settings.glow.size;

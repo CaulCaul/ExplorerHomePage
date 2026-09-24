@@ -65,7 +65,7 @@ extension/                ★ 扩展根目录（安装时「加载解压缩的�
 | `shortcuts` | `[{ id, title, url }]` | url 一定是带 http(s):// 的绝对地址 |
 | `searchHistory` | `[{ q, engine, ts }]` | 新→旧，上限 1000，相同关键词去重置顶 |
 | `iconCache` | `{ domain: dataURL }` | favicon 缓存，上限 150，FIFO 淘汰 |
-| `settings` | `{ wordmark, theme, accent, glow: { enabled, color, size(200–1200), opacity(0.1–1) }, imageEnabled, imageWidth(15–50), imageCrop: { fx, fy, zoom(1–3), iw, ih } }` | 外观设置；sanitizeSettings 清洗并钳位，settings.js 注入 CSS 变量 |
+| `settings` | `{ wordmark, placeholder, theme, accent, glow: { enabled, color, size(200–1200), opacity(0.1–1) }, imageEnabled, imageWidth(15–50), imageCrop: { fx, fy, zoom(1–3), iw, ih } }` | 外观设置；sanitizeSettings 清洗并钳位，settings.js 注入 CSS 变量 |
 | `bgImage` | `dataURL`（JPEG） | 展示图片，压缩后存储；**不随导出/导入**，换机需重选 |
 
 首次运行由 `ensureDefaults()` 懒初始化（无 background service worker，刻意保持零后台）。
@@ -107,7 +107,9 @@ extension/                ★ 扩展根目录（安装时「加载解压缩的�
 
 - **M1**：双引擎搜索 + 在线/历史候选、快捷方式增删改 + 图标缓存、导出/导入、安装教学——已实现并交付；
 - **v1.0.0**：首个正式版本，含 M1 全部 + M2 功能集：双通道角标（单气泡双行）、设置抽屉（分区：外观/光晕/图片展示/数据/关于）、浅色默认主题、拖拽排序、鼠标光晕（混合模式修复可见性，大小/透明度可调，零延迟直跟）、图片展示（模糊修复、焦点裁剪、宽度 15%–50% 可调、右缘锐利阴影+描边、开合滑动动画）、添加按钮与磁贴统一风格（悬停背景等宽）、引擎选择器内嵌搜索框（图标+滑块+分割线；Bing/Google 图标为从网上下载的官方 SVG，来源 gilbarbara/logos（CC0，经 Iconify API 获取），Bing 为官方多色渐变 logo，渐变 id 加 bing- 前缀避免冲突）、搜索按钮内缩圆角与外框嵌套；产品定位描述统一为「浏览器主页扩展」；
-- **v1.0.1（当前）**：断网立即显示离线（单轮判定 + 超时 2s）；国外通道仅测 Google 主站（移除 gstatic 误报源，manifest 同步移除其 host 权限）；图片面板动画仅在交互切换时播放（boot-no-anim 抑制初始加载过渡）；后续候选：候选关键词高亮、可配置探针间隔/历史上限；
+- **v1.0.1**：断网立即显示离线（单轮判定 + 超时 2s）；国外通道仅测 Google 主站（移除 gstatic 误报源，manifest 同步移除其 host 权限）；图片面板动画仅在交互切换时播放（boot-no-anim 抑制初始加载过渡）；
+- **v1.0.2**：快捷方式协议归一化——无协议网址按目标选默认协议（回环+私网→http，其余→https，曾一律补 https 致 `127.0.0.1:3080` 打不开本地 HTTP 服务）；存量回环 https 链接自动迁移为 http；
+- **v1.1.0（当前）**：公开仓库准备——默认搜索框提示语改为「What shall we explore?」并可在设置中自定义（settings.placeholder，留空恢复默认）；关于区新增 AI 协作声明（GLM/智谱）与 GitHub 仓库链接；后续候选：候选关键词高亮、可配置探针间隔/历史上限、Edge Add-ons 商店上架；
 - M3（候选）：跨设备同步（`chrome.storage.sync` 先做 spike，或轻量自托管后端）——用户已明确当前不需要账号体系。
 
 ## 变更习惯

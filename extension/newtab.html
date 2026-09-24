@@ -57,7 +57,7 @@
           </div>
           <span class="search-divider" aria-hidden="true"></span>
           <input id="search-input" type="text" autocomplete="off" spellcheck="false"
-                 placeholder="输入关键词搜索，↑↓ 选择候选，回车打开" />
+                 placeholder="What shall we explore?" title="↑↓ 选择候选，回车搜索" />
           <button id="search-btn" type="button" title="搜索">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
           </button>
@@ -109,6 +109,10 @@
         <div class="set-row col">
           <span class="set-label">签名文字 <em>留空则隐藏</em></span>
           <input id="wordmark-input" type="text" maxlength="30" placeholder="例如：EXPLORER HOME" />
+        </div>
+        <div class="set-row col">
+          <span class="set-label">搜索框提示语 <em>留空恢复默认</em></span>
+          <input id="placeholder-input" type="text" maxlength="60" placeholder="What shall we explore?" />
         </div>
       </section>
       <section class="set-group">
@@ -181,7 +185,12 @@
       </section>
       <section class="set-group">
         <h3>关于</h3>
-        <p class="set-hint">Explorer Home v1.0.1 · 浏览器主页扩展</p>
+        <p class="set-hint">Explorer Home v1.1.0 · 浏览器主页扩展</p>
+        <p class="set-hint">本项目由 AI 编程助手 GLM（智谱 AI）协助完成</p>
+        <p class="set-hint about-link">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+          <span>访问<a href="https://github.com/CaulCaul/ExplorerHomePage" target="_blank" rel="noreferrer">项目仓库</a></span>
+        </p>
       </section>
     </div>
   </aside>

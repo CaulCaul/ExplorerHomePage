@@ -9,3 +9,6 @@ desktop.ini
 *.log
 .vscode/
 .idea/
+
+# 发布打包产物（GitHub Releases 附件，不入库）
+dist/

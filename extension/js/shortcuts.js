@@ -24,8 +24,42 @@
   let dragEl = null;      // 拖拽排序中的磁贴
   const inFlight = {};    // 域名级并发去重
 
+  /* ---------- 网址协议归一化 ---------- */
+
+  function normalizeHost(host) {
+    return (host || '').toLowerCase().replace(/^\[/, '').replace(/\]$/, '');
+  }
+
+  /* 回环地址：localhost / *.localhost / 127.0.0.0-8 / [::1]——本地服务几乎都是 http */
+  function isLoopback(host) {
+    host = normalizeHost(host);
+    return host === 'localhost' || host === '::1' ||
+      /\.localhost$/.test(host) || /^127\./.test(host);
+  }
+
+  /* 内网私网段：10/8、172.16-31、192.168/16 */
+  function isPrivate(host) {
+    host = normalizeHost(host);
+    if (/^10\./.test(host) || /^192\.168\./.test(host)) return true;
+    const m = host.match(/^172\.(\d+)\./);
+    return !!m && Number(m[1]) >= 16 && Number(m[1]) <= 31;
+  }
+
   async function init() {
     shortcuts = await EHP.storage.get(KEY.shortcuts, []);
+    /* 迁移：回环地址的 https 链接多为旧版「无协议一律补 https」所致，
+       自动改写为 http；私网段不动，避免影响真实使用 https 的内网服务 */
+    let migrated = false;
+    shortcuts.forEach(function (sc) {
+      let u;
+      try { u = new URL(sc.url); } catch (e) { return; }
+      if (u.protocol === 'https:' && isLoopback(u.hostname)) {
+        u.protocol = 'http:';
+        sc.url = u.href;
+        migrated = true;
+      }
+    });
+    if (migrated) await EHP.storage.set(KEY.shortcuts, shortcuts);
     render();
     bindModal();
     bindDrag();
@@ -246,7 +280,13 @@
     const rawName = nameEl.value.trim();
     let url = urlEl.value.trim();
     if (!url) { showError('请填写网址'); return; }
-    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) url = 'https://' + url;
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) {
+      /* 无协议时按目标选默认协议：本地/内网地址用 http，其余用 https
+         （如 127.0.0.1:3080 → http://127.0.0.1:3080，本地服务通常无 TLS） */
+      let host = '';
+      try { host = new URL('http://' + url).hostname; } catch (e) { /* 交给下方统一校验 */ }
+      url = ((isLoopback(host) || isPrivate(host)) ? 'http://' : 'https://') + url;
+    }
 
     let u;
     try { u = new URL(url); } catch (e) { showError('网址格式不正确，请检查'); return; }
