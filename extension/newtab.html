@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="light">
+<html lang="zh-CN" data-tone="light" data-sheet-tone="light">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -7,26 +7,31 @@
   <link rel="stylesheet" href="newtab.css" />
 </head>
 <body>
-  <!-- 左侧图片展示面板 -->
-  <div class="image-panel" id="image-panel"></div>
-  <!-- 跟随鼠标的背景光晕 -->
-  <div id="glow" hidden></div>
-
-  <!-- 设置入口（右上角） -->
-  <button id="settings-btn" class="settings-btn" type="button" title="设置">
-    <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-  </button>
+  <!-- 下表面基底：可调的下表面背景色 + 砂纸颗粒。必须是真实元素——
+       multiply 混合不能以画布（body 背景）为混合底，否则孔内无法被"反射率 × 光照"正确压暗 -->
+  <div id="ground-base"></div>
+  <!-- 下表面光照：逐通道乘到下面的所有内容上（包含控件），实现 反射率 × 光照 -->
+  <div id="ground-lit"></div>
+  <!-- 下表面遮挡阴影：板材孔洞挡住直射光的区域，按几何投影（随光源移动、边缘柔化） -->
+  <div id="ground-shadow"></div>
+  <!-- 上层板材：单一颜色的板材，由 holes.js 挖孔 -->
+  <div id="wall-layer"></div>
+  <!-- 上层装饰：磁贴标题、新建虚线框、引擎边框（绘制在板材之上） -->
+  <div id="tile-decor"></div>
+  <!-- 上表面光照：乘在板材与上层装饰之上（被 #hole-mask 裁掉孔洞，孔内由下表面光照负责） -->
+  <div id="sheet-lit"></div>
 
   <main class="main">
     <div class="wordmark" id="wordmark">EXPLORER&nbsp;HOME</div>
 
     <section class="search-area" aria-label="搜索">
-      <div class="search-wrap">
-        <div class="search-box">
-          <div class="engine-switch" id="engine-switch" data-active="bing" title="切换搜索引擎">
-            <span class="engine-thumb" aria-hidden="true"></span>
-            <button type="button" data-engine="bing" aria-label="用必应搜索">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 388" width="16" height="16" aria-hidden="true">
+      <!-- 引擎选择器：与搜索框**同高并列在左侧**，两个图标都渲染在下表面，
+           上表面只有一个可滑动的孔洞（由 holes.js 依 data-active 挖出、滑动、并与搜索框同高）。
+           孔洞位置、外扩边框、未选中位置的标记全部由 JS 计算，此处只负责排布两个图标 -->
+      <div class="engine-row" id="engine-row">
+        <div class="engine-switch" id="engine-switch" data-active="bing" title="切换搜索引擎">
+          <button type="button" data-engine="bing" aria-label="用必应搜索">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 388" width="20" height="20" aria-hidden="true">
                 <defs>
                   <radialGradient id="bing-r1" cx="93.717%" cy="77.818%" r="143.121%" fx="93.717%" fy="77.818%" gradientTransform="matrix(-.65486 -.5438 .75575 -.4712 .963 1.654)">
                     <stop offset="0%" stop-color="#00cacc" />
@@ -47,7 +52,7 @@
               </svg>
             </button>
             <button type="button" data-engine="google" aria-label="用 Google 搜索">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 262" width="16" height="16" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 262" width="20" height="20" aria-hidden="true">
                 <path fill="#4285F4" d="M255.878 133.451c0-10.734-.871-18.567-2.756-26.69H130.55v48.448h71.947c-1.45 12.04-9.283 30.172-26.69 42.356l-.244 1.622l38.755 30.023l2.685.268c24.659-22.774 38.875-56.282 38.875-96.027" />
                 <path fill="#34A853" d="M130.55 261.1c35.248 0 64.839-11.605 86.453-31.622l-41.196-31.913c-11.024 7.688-25.82 13.055-45.257 13.055c-34.523 0-63.824-22.773-74.269-54.25l-1.531.13l-40.298 31.187l-.527 1.465C35.393 231.798 79.49 261.1 130.55 261.1" />
                 <path fill="#FBBC05" d="M56.281 156.37c-2.756-8.123-4.351-16.827-4.351-25.82c0-8.994 1.595-17.697 4.206-25.82l-.073-1.73L15.26 71.312l-1.335.635C5.077 89.644 0 109.517 0 130.55s5.077 40.905 13.925 58.602z" />
@@ -55,7 +60,9 @@
               </svg>
             </button>
           </div>
-          <span class="search-divider" aria-hidden="true"></span>
+      </div>
+      <div class="search-wrap" id="search-wrap">
+        <div class="search-box">
           <input id="search-input" type="text" autocomplete="off" spellcheck="false"
                  placeholder="What shall we explore?" title="↑↓ 选择候选，回车搜索" />
           <button id="search-btn" type="button" title="搜索">
@@ -83,92 +90,73 @@
     </div>
   </div>
 
-  <!-- 设置抽屉 -->
+  <!-- 设置面板：与其它控件同层（下表面），收起时被板材完全遮住，只在"齿轮孔洞扩大"后可见。
+       开与关**都由右上角的齿轮承担**（面板内不再有叉号）；点空白处的透明接收层或 Esc 也能收回 -->
   <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
   <aside class="drawer" id="drawer" aria-hidden="true">
+    <!-- 标题与齿轮同高（齿轮 38px 高、面板顶距 14px，故标题行也取 38px 居中） -->
     <div class="drawer-head">
       <h2>设置</h2>
-      <button id="drawer-close" class="icon-btn" type="button" title="关闭">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-      </button>
     </div>
     <div class="drawer-body">
       <section class="set-group">
         <h3>外观</h3>
         <div class="set-row">
-          <span class="set-label">主题</span>
-          <div class="seg" id="theme-switch">
-            <button type="button" data-theme-value="light">浅色</button>
-            <button type="button" data-theme-value="dark">深色</button>
-          </div>
+          <span class="set-label">上表面颜色</span>
+          <input type="color" id="sheet-color" title="上表面（粗布）的颜色。文字明暗会按它的明度自动切换" />
         </div>
         <div class="set-row">
-          <span class="set-label">强调色</span>
-          <div class="swatches" id="accent-swatches"></div>
+          <span class="set-label">下表面背景色</span>
+          <input type="color" id="ground-bg" title="下表面的颜色。设置面板/搜索框/快捷方式/角标都画在这一层上，界面文字会按它的明暗自动切换" />
         </div>
         <div class="set-row col">
-          <span class="set-label">签名文字 <em>留空则隐藏</em></span>
+          <span class="set-label">签名文字</span>
           <input id="wordmark-input" type="text" maxlength="30" placeholder="例如：EXPLORER HOME" />
         </div>
         <div class="set-row col">
-          <span class="set-label">搜索框提示语 <em>留空恢复默认</em></span>
+          <span class="set-label">搜索框提示语</span>
           <input id="placeholder-input" type="text" maxlength="60" placeholder="What shall we explore?" />
         </div>
       </section>
       <section class="set-group">
-        <h3>光晕</h3>
+        <h3>光照</h3>
         <div class="set-row">
-          <span class="set-label">启用光晕</span>
-          <label class="switch"><input type="checkbox" id="glow-toggle" /><span class="slider"></span></label>
-        </div>
-        <div class="set-row">
-          <span class="set-label">颜色</span>
-          <input type="color" id="glow-color" title="光晕颜色（浅色主题建议选择较饱和的颜色）" />
+          <span class="set-label">光色</span>
+          <input type="color" id="light-color" title="光源的光谱：光照会逐通道乘到画面上。光色越暗光越弱，纯黑 = 没有直射光（全屏只剩环境光）；纯红 = 只照亮红通道" />
         </div>
         <div class="set-row col">
-          <span class="set-label">大小</span>
+          <span class="set-label">光源直径</span>
           <div class="range-row">
-            <input type="range" id="glow-size" min="200" max="1200" step="20" />
-            <span class="range-val" id="glow-size-val">700px</span>
+            <input type="range" id="light-diameter" min="200" max="1200" step="20" />
+            <span class="range-val" id="light-diameter-val">700px</span>
           </div>
         </div>
         <div class="set-row col">
-          <span class="set-label">透明度</span>
+          <span class="set-label">光源强度</span>
           <div class="range-row">
-            <input type="range" id="glow-opacity" min="10" max="100" step="5" />
-            <span class="range-val" id="glow-opacity-val">50%</span>
-          </div>
-        </div>
-      </section>
-      <section class="set-group">
-        <h3>图片展示</h3>
-        <div class="set-row">
-          <span class="set-label">启用图片展示</span>
-          <label class="switch"><input type="checkbox" id="image-toggle" /><span class="slider"></span></label>
-        </div>
-        <div class="set-row">
-          <span class="set-label">展示图片 <em>仅保存在本机</em></span>
-          <div class="btn-group">
-            <button type="button" class="btn ghost" id="btn-pick-image">选择图片</button>
-            <button type="button" class="btn ghost danger-text" id="btn-remove-image">移除</button>
+            <input type="range" id="light-intensity" min="10" max="100" step="5" />
+            <span class="range-val" id="light-intensity-val">50%</span>
           </div>
         </div>
         <div class="set-row col">
-          <span class="set-label">展示区域宽度</span>
+          <span class="set-label">光源高度</span>
           <div class="range-row">
-            <input type="range" id="img-width" min="15" max="50" step="1" />
-            <span class="range-val" id="img-width-val">33%</span>
+            <input type="range" id="light-height" min="1" max="50" step="1" />
+            <span class="range-val" id="light-height-val">10</span>
           </div>
         </div>
         <div class="set-row col">
-          <span class="set-label">图片裁剪 <em>拖动选区，滚轮或滑杆缩放</em></span>
-          <div class="crop-preview" id="crop-preview" title="拖动平移展示区域；滚轮缩放">
-            <span class="crop-empty" id="crop-empty">请先选择展示图片</span>
-          </div>
+          <span class="set-label">层间距</span>
           <div class="range-row">
-            <span class="range-label">缩放</span>
-            <input type="range" id="crop-zoom" min="100" max="300" step="5" />
-            <span class="range-val" id="crop-zoom-val">100%</span>
+            <input type="range" id="light-gap" min="0.1" max="5" step="0.1" />
+            <span class="range-val" id="light-gap-val">1</span>
+          </div>
+        </div>
+        <div class="set-row col">
+          <span class="set-label">环境光</span>
+          <div class="range-row">
+            <input type="range" id="light-ambient" min="0" max="60" step="5" />
+            <span class="range-val" id="light-ambient-val">30%</span>
           </div>
         </div>
       </section>
@@ -179,14 +167,11 @@
           <button type="button" class="btn ghost" id="btn-import">导入数据</button>
           <button type="button" class="btn ghost danger-text" id="btn-clear-history">清空历史</button>
         </div>
-        <p class="set-hint">导出的 JSON 备份可放入仓库 data/ 目录（已被 git 忽略）；导入会覆盖当前快捷方式、历史与外观设置（展示图片除外）。</p>
         <input type="file" id="import-file" accept="application/json,.json" hidden />
-        <input type="file" id="image-file" accept="image/*" hidden />
       </section>
       <section class="set-group">
         <h3>关于</h3>
-        <p class="set-hint">Explorer Home v1.1.0 · 浏览器主页扩展</p>
-        <p class="set-hint">本项目由 AI 编程助手 GLM（智谱 AI）协助完成</p>
+        <p class="set-hint">Explorer Home <span id="about-version">v2.0.0</span> · 浏览器主页扩展</p>
         <p class="set-hint about-link">
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
           <span>访问<a href="https://github.com/CaulCaul/ExplorerHomePage" target="_blank" rel="noreferrer">项目仓库</a></span>
@@ -194,6 +179,12 @@
       </section>
     </div>
   </aside>
+
+  <!-- 设置入口（右上角）：刻意放在设置面板**之后**——同为 z1 时后来者居上，
+       所以孔洞扩大后面板之上仍能看到并点击齿轮，再次点击即收回 -->
+  <button id="settings-btn" class="settings-btn" type="button" title="设置">
+    <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+  </button>
 
   <!-- 添加/编辑快捷方式弹窗 -->
   <div class="overlay" id="overlay" hidden>
@@ -223,7 +214,7 @@
   <script src="js/net.js" defer></script>
   <script src="js/search.js" defer></script>
   <script src="js/shortcuts.js" defer></script>
-  <script src="js/effects.js" defer></script>
+  <script src="js/holes.js" defer></script>
   <script src="js/settings.js" defer></script>
   <script src="js/main.js" defer></script>
 </body>

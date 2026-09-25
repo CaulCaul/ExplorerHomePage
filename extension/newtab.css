@@ -1,46 +1,53 @@
-/* Explorer Home Page — 新标签页样式
- * 主题：浅色为默认（:root），深色经 :root[data-theme='dark'] 切换；
- * 强调色 --accent / --accent-strong 由 settings.js 注入。
- */
+/* Explorer Home Page 新标签页样式：上表面 = --sheet-bg、下表面 = --ground-bg（都由设置注入）
+ * 文字明暗分两套自动判定：控件/浮层看**下表面**（data-tone），上表面元素看**上表面**（data-sheet-tone） */
 
+/* 明暗由底色明度自动判定：data-tone 看下表面、data-sheet-tone 看上表面，两档互不影响，故不要写死「浅色主题用什么字色」 */
+/* ---------- 基础变量（浅色档）：每一个 var() 都必须在这里有定义 ----------
+   ⚠ 这一块不能缺：某个自定义属性全程没有定义时，引用它的**整条声明**会被判为
+   「invalid at computed-value time」而回落到初始值，表现为：
+     · `border: 1px solid var(--border)` → 直接不画线（设置面板分割线、引擎外扩框消失）
+     · `background: var(--panel-strong)` → 变透明（快捷方式编辑弹窗没有背景板）
+     · `background: var(--good)` 之类 → 变透明（网络角标的速度圆点不见了）
+   v1.3.0 重写配色时漏掉了整块基础定义，上述三个 bug 都由此而来。
+   面板/描边一律用 color-mix 从**当前文字色**混出：任何底色都能自动适配，
+   不要写死 rgba(255, 255, 255, …) 这类只对深色成立的"光"。 */
 :root {
-  --bg1: #f8fafc;
-  --bg2: #e7edf5;
-  --panel: rgba(255, 255, 255, 0.75);
-  --panel-strong: #ffffff;
-  --surface: rgba(255, 255, 255, 0.97);
-  --border: rgba(15, 23, 42, 0.14);
   --text: #1f2937;
   --text-dim: #64748b;
+  --sheet-text: #1f2937;
+  --sheet-text-dim: #64748b;
   --good: #16a34a;
   --fair: #d97706;
   --poor: #ea580c;
   --offline: #dc2626;
-  --icon-chip: #ffffff;
-  --shadow: 0 18px 50px rgba(15, 23, 42, 0.16);
-  --edge-shadow: 6px 0 14px -6px rgba(15, 23, 42, 0.55);
-  --edge-line: rgba(15, 23, 42, 0.16);
-  --accent: #8b93f4;
-  --accent-strong: #6366f1;
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
+  /* 下表面的"材质"（#ground-base 的底色、.drawer 的面板底色）：
+     单色平面方案下它**就是** --ground-bg，只是多一个变量名，
+     好让「基底」与「面板」共用同一份底色、且 #ground-base 始终有真实底色可供 multiply 混合
+     （⚠ 曾经既没在 CSS 定义、JS 也没注入 → 两条声明同时失效：#ground-base 变透明、
+     设置面板变成"没有背景板"） */
+  --ground-fill: var(--ground-bg, #eff3f9);
+  --panel: color-mix(in srgb, var(--text) 8%, transparent);
+  --border: color-mix(in srgb, var(--text) 20%, transparent);
+  --surface: color-mix(in srgb, var(--ground-bg, #ffffff) 94%, var(--text) 6%);
+  --panel-strong: color-mix(in srgb, var(--ground-bg, #ffffff) 84%, var(--text) 16%);
 }
 
-:root[data-theme='dark'] {
-  --bg1: #0f172a;
-  --bg2: #1e1b4b;
-  --panel: rgba(255, 255, 255, 0.08);
-  --panel-strong: #1e293b;
-  --surface: rgba(30, 41, 59, 0.97);
-  --border: rgba(255, 255, 255, 0.14);
+/* 深色档：只覆盖文字与状态色（面板/描边由上面的 color-mix 自动适配，不再写死白色） */
+:root[data-tone='dark'] {
   --text: #e2e8f0;
   --text-dim: #94a3b8;
   --good: #4ade80;
   --fair: #fbbf24;
   --poor: #fb923c;
   --offline: #f87171;
-  --icon-chip: rgba(255, 255, 255, 0.92);
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
-  --edge-shadow: 6px 0 14px -6px rgba(0, 0, 0, 0.8);
-  --edge-line: rgba(0, 0, 0, 0.5);
+}
+
+/* 上表面深色：上表面颜色本身较暗时启用（与下表面的 data-tone 各自独立判断） */
+:root[data-sheet-tone='dark'] {
+  --sheet-text: #e2e8f0;
+  --sheet-text-dim: #94a3b8;
 }
 
 * { box-sizing: border-box; }
@@ -55,7 +62,8 @@ html, body {
 body {
   font-family: system-ui, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
   color: var(--text);
-  background: linear-gradient(160deg, var(--bg1) 0%, var(--bg2) 100%);
+  /* 画布底色：⚠ 真正参与 multiply 混合的是 #ground-base，写在 body 上只影响滚动条/过卷区域 */
+  background: var(--ground-bg);
   background-attachment: fixed;
   overflow-y: auto;
 }
@@ -68,7 +76,7 @@ button { font-family: inherit; }
   position: fixed;
   top: 14px;
   right: 16px;
-  z-index: 60;
+  z-index: 1; /* 控件层 z1：位于光照层（z2）与板材（z3）之下 —— ⚠ 控件必须在光照层之下，否则阴影压到图标上时图标还是亮的 */
   display: grid;
   place-items: center;
   width: 38px;
@@ -79,21 +87,27 @@ button { font-family: inherit; }
   border-radius: 50%;
   backdrop-filter: blur(10px);
   cursor: pointer;
-  transition: color 0.15s, transform 0.25s;
+  transition: color 0.15s;
 }
+
+/* ⚠ 悬停旋转必须转**里面的图标**、不能转按钮本身：按钮一旦被旋转，getBoundingClientRect() 会胀成 ~52px（38×(cos30+sin30)），而挖孔用的就是这个矩形
+   —— 于是悬停时孔位忽大忽小、收回时先缩成大一圈再跳变（v1.3.0 实测 bug） */
+.settings-btn svg { transition: transform 0.25s; }
 
 .settings-btn:hover {
   color: var(--text);
-  transform: rotate(30deg);
 }
 
-/* ---------- 网络状态角标（右下角，单气泡双行） ---------- */
+.settings-btn:hover svg { transform: rotate(30deg); }
+
+/* ---------- 网络状态角标（左下角，单气泡双行；右侧整片让给设置面板） ---------- */
 
 .net-panel {
   position: fixed;
-  right: 16px;
+  left: 16px;
   bottom: 16px;
-  z-index: 50;
+  z-index: 1; /* 控件层：位于光照层之下、板材之下 */
+  width: 132px; /* 固定宽度：文本长度变化不再撑开控件（否则孔位/阴影会与边框错位） */
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -121,7 +135,7 @@ button { font-family: inherit; }
   background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 
-.net-name { width: 2.6em; user-select: none; }
+.net-name { width: 2.6em; flex: none; user-select: none; }
 
 .net-dot {
   width: 8px;
@@ -131,147 +145,111 @@ button { font-family: inherit; }
   flex: none;
 }
 
-.net-text { min-width: 3.2em; text-align: right; }
+/* 文本占据剩余宽度并右对齐：长度变化不再影响控件尺寸 */
+.net-text { flex: 1; min-width: 0; text-align: right; white-space: nowrap; }
 
 /* ---------- 主区域布局 ---------- */
+/* 层结构：下表面基底(0) < 控件(z1) < 下表面光照 + 遮挡阴影(z2) < 板材(z3) < 装饰/签名(z4) < 上表面光照(z5) < 候选下拉(z6)，抽屉/弹窗/Toast
+   走 80+。⚠ 控件必须在**光照层之下**（否则阴影压到图标上时图标还是亮的），签名/标题等上层元素必须留在**上表面光照层之下**（否则它们不受光照影响）。
+   注意 .main 不设 z-index —— 会生成层叠上下文、把签名与候选下拉困在板材之下 */
 
 .main {
   position: relative;
-  z-index: 1;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 56px 16px 90px;
-  transition: padding-left 0.3s ease; /* 图片面板开合/宽度变化时内容平滑跟随 */
 }
 
+/* 签名属于上层：绘制在板材之上（文字色随上表面颜色自动切换） */
 .wordmark {
+  position: relative;
+  z-index: 4;
   font-size: 13px;
   letter-spacing: 0.42em;
-  color: var(--text-dim);
+  color: var(--sheet-text-dim);
   opacity: 0.85;
   margin-bottom: 30px;
   user-select: none;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.18);
 }
 
-/* ---------- 搜索区 ---------- */
+/* ---------- 搜索区：引擎选择器与搜索框**同高并列** ---------- */
 
 .search-area {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
+  justify-content: center;
+  gap: 12px;
   width: 100%;
 }
 
-/* 分段控件（引擎切换 / 主题切换共用） */
-.seg {
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-}
-
-.seg button {
-  border: 0;
-  padding: 5px 18px;
-  font-size: 13px;
-  color: var(--text-dim);
-  background: transparent;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.seg button:hover { color: var(--text); }
-
-.seg button.active {
-  background: var(--accent-strong);
-  color: #fff;
-}
-
-/* 搜索框内：引擎切换（图标按钮 + 圆角方块滑块） */
-.engine-switch {
+/* 引擎选择器：两个图标都渲染在**下表面**（控件层），上表面只有一个可滑动的孔（由 holes.js 按 #engine-switch[data-active] 挖出并滑动），透过孔洞看到的就是当前引擎。
+   孔洞位置与外扩边框（与搜索框等高）全部由 JS 计算，这里只负责排布图标 */
+.engine-row {
   position: relative;
+  z-index: 1; /* 控件层：位于光照层之下、板材之下 */
   display: flex;
   align-items: center;
   flex: none;
-  margin-left: 7px;
-  padding: 3px;
+}
+
+.engine-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .engine-switch button {
-  position: relative;
-  z-index: 1;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   background: transparent;
   border: 0;
+  border-radius: 12px;
   cursor: pointer;
-  opacity: 0.45;
-  transition: opacity 0.15s;
 }
 
-.engine-switch button:hover { opacity: 0.8; }
+.engine-switch button svg { display: block; }
 
-.engine-switch button.active { opacity: 1; }
-
-/* 当前引擎的圆角方块滑块，切换时滑动 */
-.engine-thumb {
+/* 上表面（装饰层，压在板材之上）：外扩边框与两个图标等高（= 搜索框高度），框住两个图标的位置、标示孔洞可移动的范围 */
+.engine-frame {
   position: absolute;
-  z-index: 0;
-  top: 3px;
-  left: 3px;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--accent-strong) 16%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent-strong) 32%, transparent);
-  transition: transform 0.18s ease;
+  border: 1px solid color-mix(in srgb, var(--sheet-text) 22%, transparent);
+  border-radius: 14px;
   pointer-events: none;
 }
 
-.engine-switch[data-active='google'] .engine-thumb { transform: translateX(30px); }
-
-/* 引擎选择与输入框的短竖分割线 */
-.search-divider {
-  flex: none;
-  width: 1px;
-  height: 22px;
-  margin: 0 2px 0 8px;
-  background: var(--border);
-}
+/* 未选中位置：不做任何标记（旧版的空心圆圈已删除） */
 
 .search-wrap {
   position: relative;
-  width: min(640px, 88vw);
+  flex: 0 1 auto;
+  /* 与左侧引擎选择器并排，故从 88vw 里让出 ~108px，避免窄视口溢出 */
+  width: min(640px, calc(88vw - 108px));
+  min-width: 220px;
 }
 
 .search-box {
+  position: relative;
+  z-index: 1; /* 控件层：位于阴影/受光层之下、板材之下 */
   display: flex;
   align-items: center;
   background: var(--panel);
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: 14px;
   backdrop-filter: blur(12px);
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.search-box:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-strong) 22%, transparent);
 }
 
 #search-input {
   flex: 1;
   min-width: 0;
-  padding: 14px 18px 14px 10px;
+  padding: 14px 18px;
   font-size: 16px;
   color: var(--text);
   background: transparent;
@@ -309,14 +287,15 @@ button { font-family: inherit; }
   top: 52px;
   left: 0;
   right: 0;
-  z-index: 40;
+  z-index: 6; /* 瞬态浮层：位于上表面光照之上（浮层不参与光影，保证可读） */
   margin: 6px 0 0;
   padding: 6px 0;
   list-style: none;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 14px;
-  backdrop-filter: blur(14px);
+  /* ⚠ 不要加 backdrop-filter：--surface 已经 97% 不透明，模糊根本看不见，
+     却会在每次光影更新时强制重做一次整块背景快照 + 模糊（鼠标移动时 GPU 瞬时占用的来源之一） */
   box-shadow: var(--shadow);
   max-height: 420px;
   overflow-y: auto;
@@ -331,7 +310,7 @@ button { font-family: inherit; }
   cursor: pointer;
 }
 
-.sug.active { background: color-mix(in srgb, var(--accent-strong) 18%, transparent); }
+.sug.active { background: color-mix(in srgb, var(--text) 10%, transparent); }
 
 .sug-icon {
   display: grid;
@@ -357,9 +336,11 @@ button { font-family: inherit; }
   padding: 1px 5px;
 }
 
-/* ---------- 快捷方式区 ---------- */
+/* ---------- 快捷方式 ---------- */
 
 .shortcuts {
+  position: relative;
+  z-index: 1; /* 控件层：位于光照层之下、板材之下 */
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   gap: 14px;
@@ -367,7 +348,8 @@ button { font-family: inherit; }
   margin-top: 58px;
 }
 
-.tile { position: relative; }
+/* 磁贴：命中区域收缩到图标孔内（pointer-events 反转：容器不响应，仅图标响应）。⚠ 代价是名称区域不再参与 HTML5 拖拽排序，排序请抓图标 */
+.tile { position: relative; pointer-events: none; }
 
 .tile.dragging { opacity: 0.35; }
 
@@ -382,31 +364,28 @@ button { font-family: inherit; }
   border-radius: 14px;
   text-decoration: none;
   color: var(--text);
-  transition: background 0.15s, transform 0.15s;
-}
-
-a.tile-link:hover {
-  background: color-mix(in srgb, var(--text) 7%, transparent);
-  transform: translateY(-2px);
 }
 
 .tile-icon {
+  position: relative;
   display: grid;
   place-items: center;
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: rgba(127, 127, 127, 0.25);
-  color: #fff;
+  background: transparent; /* 与下表面一致，保证孔内视觉一致 */
+  color: hsl(var(--letter-h, 220) 45% 42%);
   font-size: 20px;
   font-weight: 600;
   user-select: none;
+  pointer-events: auto; /* 唯一命中区域 = 图标孔 */
 }
 
-/* 图标底片：白色芯片衬托 favicon，深浅主题下都清晰 */
-.tile-icon.has-img {
-  background: var(--icon-chip);
-  border: 1px solid var(--border);
+/* 悬停提示：标题变深 + 下划线 + 右侧浮现「编辑」符号（图标本身不做任何变化 —— 用户要求指针路过图标时不闪动画） */
+
+/* 下表面较暗时首字母色块改用更亮的字色（45% → 72% 亮度），保证深色底上仍可读 */
+:root[data-tone='dark'] .tile-icon {
+  color: hsl(var(--letter-h, 220) 45% 72%);
 }
 
 .tile-icon img {
@@ -416,40 +395,19 @@ a.tile-link:hover {
   object-fit: contain;
 }
 
+/* 标题占位：仅维持布局尺寸，实际文字绘制在上层装饰层（#tile-decor） */
 .tile-title {
   max-width: 100%;
   font-size: 12px;
-  color: var(--text-dim);
+  line-height: 1.4;
+  color: transparent;
+  visibility: hidden;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tile:hover .tile-title { color: var(--text); }
-
-.tile-edit {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  color: var(--text);
-  background: var(--panel-strong);
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.tile:hover .tile-edit { opacity: 1; }
-
-.tile-edit:hover { filter: brightness(0.95); }
-
-/* 添加按钮（与其他磁贴同构：图标位 + 标题位，虚线只出现在图标框上）
-   注意：button 即使 display:flex 也不会撑满父容器，必须显式 width:100% */
+/* 添加按钮：下层仅占位（不可见但可点击 → 悬停），虚线框绘制在上层装饰层。注意 button 即使 display:flex 也不会撑满父容器，必须显式写 width:100% */
 
 button.tile-link {
   border: 0;
@@ -459,83 +417,62 @@ button.tile-link {
   color: var(--text-dim);
 }
 
-button.tile-link:hover {
-  color: var(--text);
-  background: color-mix(in srgb, var(--text) 7%, transparent);
-  transform: translateY(-2px);
-}
-
+/* 加号占位：不可见的命中区域（对齐上层虚线框），虚线框与加号均绘制在上层装饰层 */
 .tile-plus {
   display: grid;
   place-items: center;
   width: 48px;
   height: 48px;
-  border: 1.5px dashed var(--border);
   border-radius: 12px;
   font-size: 22px;
   font-weight: 300;
-  transition: border-color 0.15s, color 0.15s;
+  color: transparent;
+  pointer-events: auto; /* 命中区域 = 虚线框范围 */
 }
 
-button.tile-link:hover .tile-plus {
-  border-color: var(--accent);
-  color: var(--text);
-}
+/* ---------- 设置面板（下表面上的面板 + 会长大的孔洞） ---------- */
 
-/* ---------- 设置抽屉 ---------- */
-
+/* 点击空白处收回设置面板的透明接收层（不压暗板材，否则破坏挖孔观感）。z1（与控件同层但排在面板之前）—— 板材/光照层都是 pointer-events: none，所以点在空白板材上会落到它身上；
+   面板与齿轮排在它之后，仍可正常点击 */
 .drawer-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 80;
-  background: rgba(15, 23, 42, 0.35);
-  backdrop-filter: blur(2px);
+  z-index: 1;
+  background: transparent;
 }
 
+/* 设置面板：**画在下表面**（z1，被光照层乘到、被板材遮住），只有齿轮的孔洞扩大后才露出来 —— 开合动画完全由孔洞几何驱动，面板本身不做位移。
+   ⚠ 底色必须是「下表面本身」（同一份渐变 + background-attachment: fixed 对齐视口）：换成 --panel-strong 之类浅色蒙层会在下表面是纯红时把它洗成浅红（实测
+   bug）；同时必须**不透明**，才能压住同一层里位于面板背后的磁贴与搜索框 */
 .drawer {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 85;
-  width: min(380px, 94vw);
+  /* 与齿轮按钮（top:14 / right:16）对齐：孔洞从齿轮位置**只向外长**，边缘不会反向收进来 */
+  top: 14px;
+  right: 16px;
+  bottom: 14px;
+  z-index: 1;
+  width: min(400px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
-  background: var(--panel-strong);
-  border-left: 1px solid var(--border);
-  box-shadow: -24px 0 60px rgba(15, 23, 42, 0.25);
-  transform: translateX(105%);
-  transition: transform 0.22s ease;
+  background: var(--ground-fill);
+  background-attachment: fixed;
+  border: 0;
+  border-radius: 22px; /* ⚠ 必须与 holes.js 的 PANEL_RX 一致 */
+  pointer-events: none; /* 收起时被板材盖住，但板材不接收指针事件，故必须显式关闭 */
 }
 
-.drawer.open { transform: none; }
+.drawer.open { pointer-events: auto; }
 
+/* 标题行与齿轮同高：齿轮 38px 高、其顶边距视口 14px = 面板顶边，故标题行取 38px 居中 */
 .drawer-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 18px 20px 12px;
+  height: 38px;
+  padding: 0 62px 0 20px; /* 右侧给浮在面板之上的齿轮留位 */
   border-bottom: 1px solid var(--border);
 }
 
 .drawer-head h2 { margin: 0; font-size: 16px; }
-
-.icon-btn {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  color: var(--text-dim);
-  background: transparent;
-  border: 0;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.icon-btn:hover {
-  color: var(--text);
-  background: color-mix(in srgb, var(--text) 8%, transparent);
-}
 
 .drawer-body {
   flex: 1;
@@ -583,66 +520,12 @@ button.tile-link:hover .tile-plus {
   outline: 0;
 }
 
-.set-row input:focus { border-color: var(--accent); }
-
-.swatches { display: flex; gap: 8px; flex-wrap: wrap; }
-
-.swatch {
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  cursor: pointer;
-}
-
-.swatch.active {
-  border-color: var(--panel-strong);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-strong) 60%, transparent);
-}
+.set-row input:focus { border-color: var(--text-dim); }
 
 .set-actions { display: flex; gap: 10px; flex-wrap: wrap; padding: 6px 0; }
 
-.btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
-
-/* 开关（switch） */
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 40px;
-  height: 22px;
-  flex: none;
-}
-
-.switch input { opacity: 0; width: 0; height: 0; }
-
-.switch .slider {
-  position: absolute;
-  inset: 0;
-  background: color-mix(in srgb, var(--text) 20%, transparent);
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.switch .slider::before {
-  content: '';
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  left: 3px;
-  top: 3px;
-  background: #fff;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  transition: transform 0.2s;
-}
-
-.switch input:checked + .slider { background: var(--accent-strong); }
-.switch input:checked + .slider::before { transform: translateX(18px); }
-
-/* 颜色选择器 */
-#glow-color {
+/* 颜色选择器（上下表面背景色 / 光照颜色） */
+input[type="color"] {
   width: 40px;
   height: 26px;
   padding: 0;
@@ -652,10 +535,11 @@ button.tile-link:hover .tile-plus {
   cursor: pointer;
 }
 
-#glow-color::-webkit-color-swatch-wrapper { padding: 2px; }
-#glow-color::-webkit-color-swatch { border: none; border-radius: 4px; }
+input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
 
-/* 滑杆行（展示宽度 / 裁剪缩放） */
+/* 滑杆行（光照参数）。⚠ range 必须排除 `.set-row input` 的 padding/border/background：那些内边距会把 range 的**内容盒**向内缩
+   12px，拇指也就只能停在离两端 12px 处（表现为「滑块滑不到左右两端」），外层还会多出一个方框。两者特异性相同，靠**书写顺序**取胜（range 规则在后），改动顺序时当心 */
 .range-row { display: flex; align-items: center; gap: 10px; width: 100%; }
 
 .range-label { font-size: 12px; color: var(--text-dim); flex: none; }
@@ -665,35 +549,14 @@ button.tile-link:hover .tile-plus {
 input[type="range"] {
   flex: 1;
   min-width: 0;
-  height: 18px;
-  accent-color: var(--accent-strong);
-  cursor: pointer;
-}
-
-/* 裁剪预览框 */
-.crop-preview {
-  position: relative;
   width: 100%;
-  height: 150px;
-  margin: 4px 0 8px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background-color: color-mix(in srgb, var(--text) 6%, transparent);
-  background-repeat: no-repeat;
-  overflow: hidden;
-  cursor: grab;
-  touch-action: none;
-}
-
-.crop-preview.grabbing { cursor: grabbing; }
-
-.crop-empty {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  color: var(--text-dim);
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  accent-color: var(--text-dim);
+  cursor: pointer;
 }
 
 .set-hint {
@@ -713,8 +576,8 @@ input[type="range"] {
 .about-link svg { color: var(--text-dim); flex: none; }
 
 .about-link a {
-  color: var(--accent-strong);
-  text-decoration: none;
+  color: var(--text);
+  text-decoration: underline;
   margin-left: 4px;
 }
 
@@ -767,7 +630,7 @@ input[type="range"] {
   outline: 0;
 }
 
-.field input:focus { border-color: var(--accent); }
+.field input:focus { border-color: var(--text-dim); }
 
 .error {
   margin: -6px 0 12px;
@@ -795,9 +658,9 @@ input[type="range"] {
 .btn:hover { filter: brightness(1.08); }
 
 .btn.primary {
-  color: #fff;
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
+  color: var(--ground-bg, #ffffff);
+  background: var(--text);
+  border-color: var(--text);
 }
 
 .btn.ghost {
@@ -836,75 +699,162 @@ input[type="range"] {
   box-shadow: var(--shadow);
 }
 
-/* ---------- 背景光晕与图片面板 ---------- */
+/* ---------- 上下两层：板材 + 挖孔 + 光照 ----------
+   光照一律是「乘法」（mix-blend-mode: multiply）：显示值 = 反射率 × 光照 —— 纯黑反照率（如 GitHub 图标）在再强的光下仍是黑色，「光照强度」只体现为其它部分被压暗多少。⚠ 两个光照层都必须画在**它们要照亮的全部内容之上**，且不能以画布为混合底（body 背景会被提升为画布背景），所以下表面基底必须是真实元素 #ground-base */
 
-/* 光晕：混合模式保证任何主题背景下可见（浅色 multiply / 深色 screen） */
-#glow {
+/* 下表面基底：可调的下表面背景色（孔内看到的就是它）。⚠ 必须是真实元素：body 背景会被提升为画布背景，multiply 无法以画布为混合底 */
+#ground-base {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 700px;
-  height: 700px;
+  inset: 0;
   z-index: 0;
   pointer-events: none;
-  border-radius: 50%;
-  opacity: var(--glow-o, 0.5);
-  filter: blur(6px);
+  background: var(--ground-fill);
+}
+
+/* 下表面光照：整屏的逐通道乘法（--ground-light 由 holes.js 按物理几何烘焙）。⚠ 不加蒙版 —— 板材只留出孔洞，所以它实际只作用于透过孔洞看到的下表面与孔内控件 */
+#ground-lit {
+  position: fixed;
+  inset: 0;
+  z-index: 2; /* 控件之上、板材之下：光照因此会逐像素穿过图标与文字 */
+  pointer-events: none;
+  background: var(--ground-light, none);
   mix-blend-mode: multiply;
 }
 
-:root[data-theme='dark'] #glow {
-  mix-blend-mode: screen;
-  opacity: calc(var(--glow-o, 0.5) * 1.1);
-}
-
-.image-panel {
+/* 下表面遮挡阴影：板材孔洞挡住直射光的区域（#shadow-mask 黑=透光区、白=被挡）。
+   烘焙值 = 环境光 ÷ 该点光照，正好把直射光那一份「除」掉 —— 阴影区只剩环境光，纯黑光色时自动没有阴影 */
+#ground-shadow {
   position: fixed;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: var(--img-w, 33vw);
-  z-index: 0;
-  background-color: var(--bg2);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  transform: translateX(-101%);
-  border-right: 1px solid transparent;
-  box-shadow: 6px 0 14px -6px transparent;
-  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease, width 0.25s ease;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: var(--ground-shadow, none);
+  mix-blend-mode: multiply;
+  -webkit-mask: url(#shadow-mask);
+  mask: url(#shadow-mask);
 }
 
-/* 开启：滑入 + 右缘锐利细阴影与 1px 描边（图片浮于内容区上层的视觉效果） */
-body.has-image .image-panel {
-  transform: none;
-  box-shadow: var(--edge-shadow);
-  border-right-color: var(--edge-line);
+/* 上层板材：单一颜色的平面，按 #hole-mask 在控件位置挖孔。⚠ v1.3.0 已整体删除贴图/法线/ORM/WebGL 着色器等纹理方案（用户认为纹理破坏简洁性），这里不要再加「材质子层」 */
+#wall-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: var(--sheet-bg);
+  -webkit-mask: url(#hole-mask);
+  mask: url(#hole-mask);
 }
 
-/* 内容整体右移：在图片右侧的剩余区域中居中 */
-body.has-image .main { padding-left: var(--img-w, 33vw); }
-body.has-image .search-wrap { width: min(640px, calc(88vw - var(--img-w, 33vw))); }
-body.has-image .shortcuts { width: min(600px, calc(90vw - var(--img-w, 33vw))); }
+/* 上表面光照层的补充：板材只提供反照率（--sheet-bg），照明一律由光照层相乘给出，此处不承载任何材质或纹理 */
+/* 上表面光照与 #ground-lit 是同一套逻辑：holes.js 只写 --sheet-light 变量，几何永远由 CSS 蒙版决定。
+   ⚠ 曾经的 WebGL 材质层（canvas 挂进 #wall-layer / #ground-base）已随纹理方案整体回退删除 */
+/* 上表面光照：乘在板材**与上层装饰**（签名/标题/边框）之上，使上表面的元素同样随光照变化；用 #hole-mask 裁掉孔洞，避免把孔内（下表面）照两遍 */
+#sheet-lit {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--sheet-light, none);
+  mix-blend-mode: multiply;
+  -webkit-mask: url(#hole-mask);
+  mask: url(#hole-mask);
+}
 
-/* 初始加载抑制面板/内容过渡动画：滑动动画只在用户切换状态时播放 */
-body.boot-no-anim .image-panel,
-body.boot-no-anim .main { transition: none !important; }
+/* ⚠ = 控件边界：控件自身描边与底色隐去，切口由板材蒙版给出。
+   这里不再保留任何 box-shadow / 描边（旧版残留的「固定阴影」就是这么来的）：控件的明暗完全来自**上层**的 #ground-lit / #ground-shadow —— 控件位于这两层之下，所以遮挡阴影与半影会逐像素穿过图标与文字 */
+.search-box,
+.net-panel,
+.settings-btn {
+  border: 0;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+/* ---------- 磁贴上层装饰（标题 / 新建虚线框 / 引擎边框） ---------- */
+
+#tile-decor {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* 磁贴名称（绘制在上层板材之上）：本身就是**编辑入口** —— 悬停时文字变深 + 下划线，右侧滑出铅笔符号；点击调 EHP.shortcuts.edit(id)（⚠ 传 id
+   而不是对象/元素，磁贴重渲染后旧引用一律失效） */
+.tile-decor-title {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--sheet-text-dim);
+  overflow: hidden;
+  transition: color 0.15s;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
+  pointer-events: none; /* 悬停时（.hover）才接管点击，避免挡住下层磁贴 */
+}
+
+.tile-decor-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 编辑符号：常驻 DOM 但宽度为 0，悬停时滑出（不改变名称的居中基线） */
+.tile-decor-edit {
+  display: flex;
+  align-items: center;
+  flex: none;
+  max-width: 0;
+  margin-left: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-width 0.18s ease, margin-left 0.18s ease, opacity 0.18s ease;
+}
+
+.tile-decor-edit svg { width: 11px; height: 11px; }
+
+.tile-decor-title.hover {
+  color: var(--sheet-text);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.tile-decor-title.hover .tile-decor-name { text-decoration: underline; }
+
+.tile-decor-title.hover .tile-decor-edit {
+  max-width: 15px;
+  margin-left: 4px;
+  opacity: 1;
+}
+
+/* 新建磁贴装饰：虚线框完全在上层，下层按钮仅接收点击 */
+.tile-add-decor {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border: 1.5px dashed color-mix(in srgb, var(--sheet-text) 28%, transparent);
+  border-radius: 13px;
+  color: var(--sheet-text-dim);
+  font-size: 22px;
+  font-weight: 300;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.tile-add-decor.hover {
+  border-color: color-mix(in srgb, var(--sheet-text) 60%, transparent);
+  color: var(--sheet-text);
+}
 
 /* ---------- 响应式 ---------- */
-
-@media (max-width: 720px) {
-  /* 窄屏：图片面板改为顶部横幅 */
-  .image-panel { width: 100%; height: 30vh; bottom: auto; border-right: 0; border-bottom: 1px solid transparent; box-shadow: 0 6px 14px -6px transparent; }
-  body.has-image .image-panel { box-shadow: 0 6px 14px -6px rgba(15, 23, 42, 0.55); border-bottom-color: var(--edge-line); }
-  :root[data-theme='dark'] body.has-image .image-panel { box-shadow: 0 6px 14px -6px rgba(0, 0, 0, 0.8); }
-  body.has-image .main { padding-left: 16px; padding-top: calc(30vh + 48px); justify-content: flex-start; }
-  body.has-image .search-wrap { width: min(640px, 88vw); }
-  body.has-image .shortcuts { width: min(600px, 90vw); }
-}
 
 @media (max-width: 480px) {
   .main { justify-content: flex-start; padding-top: 90px; }
   .shortcuts { margin-top: 44px; }
-  .net-panel { right: 10px; bottom: 10px; }
+  .net-panel { left: 10px; bottom: 10px; }
+  .drawer { top: 10px; right: 10px; bottom: 10px; width: calc(100vw - 20px); }
 }

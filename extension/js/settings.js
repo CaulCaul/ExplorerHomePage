@@ -1,7 +1,7 @@
-/* Explorer Home Page — 设置抽屉：主题 / 强调色 / 签名 / 光晕 / 图片展示与裁剪 / 数据管理
- * 主题通过 :root[data-theme] 变量切换（默认浅色）；
- * 强调色由 JS 注入 --accent-strong / --accent（后者用 color-mix 派生浅色）；
- * 图片裁剪：预览框拖动改焦点 (fx/fy)，滚轮/滑杆改 zoom，面板与预览共用布局函数。
+/* Explorer Home Page — 设置抽屉：上下表面背景色 / 签名 / 提示语 / 光照 / 数据管理
+ * 配色由 JS 注入 --sheet-bg（上表面粗布色）与 --ground-bg；界面明暗（data-tone）按**下表面**颜色的
+ * 明度自动切换，上表面文字（data-sheet-tone）按**上表面**颜色的明度切换 —— 所以任意背景色下都读得清；
+ * 光照参数全部交给 holes.js 按物理几何推导（圆盘光源直径 / 光源高度 / 层间距 / 环境光等）。
  */
 (function () {
   'use strict';
@@ -9,78 +9,67 @@
   const EHP = window.EHP;
   const KEY = EHP.storage.KEY;
 
-  const ACCENTS = [
-    { color: '#6366f1', name: '靛蓝' },
-    { color: '#2563eb', name: '湛蓝' },
-    { color: '#0d9488', name: '青碧' },
-    { color: '#16a34a', name: '森绿' },
-    { color: '#ea580c', name: '暖橙' },
-    { color: '#e11d48', name: '玫红' }
-  ];
-
   const drawer = document.getElementById('drawer');
   const backdrop = document.getElementById('drawer-backdrop');
   const settingsBtn = document.getElementById('settings-btn');
-  const closeBtn = document.getElementById('drawer-close');
-  const themeSwitch = document.getElementById('theme-switch');
-  const swatchWrap = document.getElementById('accent-swatches');
+  const sheetColorInput = document.getElementById('sheet-color');
+  const groundBgInput = document.getElementById('ground-bg');
   const wordmarkInput = document.getElementById('wordmark-input');
   const wordmarkEl = document.getElementById('wordmark');
-  const glowToggle = document.getElementById('glow-toggle');
-  const glowColor = document.getElementById('glow-color');
-  const glowSize = document.getElementById('glow-size');
-  const glowSizeVal = document.getElementById('glow-size-val');
-  const glowOpacity = document.getElementById('glow-opacity');
-  const glowOpacityVal = document.getElementById('glow-opacity-val');
-  const imageToggle = document.getElementById('image-toggle');
-  const btnPickImage = document.getElementById('btn-pick-image');
-  const btnRemoveImage = document.getElementById('btn-remove-image');
-  const imageFile = document.getElementById('image-file');
-  const imgWidth = document.getElementById('img-width');
-  const imgWidthVal = document.getElementById('img-width-val');
-  const cropPreview = document.getElementById('crop-preview');
-  const cropEmpty = document.getElementById('crop-empty');
-  const cropZoom = document.getElementById('crop-zoom');
-  const cropZoomVal = document.getElementById('crop-zoom-val');
+  const placeholderInput = document.getElementById('placeholder-input');
+  const searchInput = document.getElementById('search-input');
+  const lightColor = document.getElementById('light-color');
+  const lightDiameter = document.getElementById('light-diameter');
+  const lightDiameterVal = document.getElementById('light-diameter-val');
+  const lightIntensity = document.getElementById('light-intensity');
+  const lightIntensityVal = document.getElementById('light-intensity-val');
+  const lightHeight = document.getElementById('light-height');
+  const lightHeightVal = document.getElementById('light-height-val');
+  const lightGap = document.getElementById('light-gap');
+  const lightGapVal = document.getElementById('light-gap-val');
+  const lightAmbient = document.getElementById('light-ambient');
+  const lightAmbientVal = document.getElementById('light-ambient-val');
   const btnExport = document.getElementById('btn-export');
   const btnImport = document.getElementById('btn-import');
   const btnClear = document.getElementById('btn-clear-history');
   const fileInput = document.getElementById('import-file');
-  const placeholderInput = document.getElementById('placeholder-input');
-  const searchInput = document.getElementById('search-input');
 
   let settings = EHP.storage.DEFAULT_SETTINGS;
-  let bgSrc = '';
   let toastTimer = null;
   let wordmarkTimer = null;
   let placeholderTimer = null;
-  let glowColorTimer = null;
-  let glowSizeTimer = null;
-  let glowOpacityTimer = null;
-  let cropSaveTimer = null;
-  let widthSaveTimer = null;
-  let cropDragging = false;
-  let cropDrag = { x: 0, y: 0, fx: 0.5, fy: 0.5 };
-
-  function clamp01(v) { return Math.min(1, Math.max(0, v)); }
-  function clampRange(v, min, max) { return Math.min(max, Math.max(min, v)); }
+  let lightSaveTimer = null;
 
   /* ---------- 应用到页面 ---------- */
 
-  function applyTheme() {
-    document.documentElement.dataset.theme = settings.theme;
+  /* 相对亮度（sRGB → 线性，WCAG 公式）：用来判断某个背景色该配深字还是浅字 */
+  function hexLum(hex) {
+    const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+    if (!m) return 1;
+    const lin = function (i) {
+      const v = parseInt(m[i], 16) / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * lin(1) + 0.7152 * lin(2) + 0.0722 * lin(3);
   }
 
-  function applyAccent() {
-    const root = document.documentElement.style;
-    root.setProperty('--accent-strong', settings.accent);
-    root.setProperty('--accent', 'color-mix(in srgb, ' + settings.accent + ' 65%, white)');
+  /* 背景色 + 自动明暗：
+     · 界面（设置面板/搜索框/角标/齿轮/浮层）画在下表面 → 明暗取**下表面**颜色
+     · 签名/名称/引擎边框画在上表面 → 明暗取**上表面**颜色 */
+  function applyAppearance() {
+    const root = document.documentElement;
+    root.style.setProperty('--ground-bg', settings.groundBg);
+    root.style.setProperty('--sheet-bg', settings.sheetColor);
+    root.dataset.tone = hexLum(settings.groundBg) < 0.2 ? 'dark' : 'light';
+    root.dataset.sheetTone = hexLum(settings.sheetColor) < 0.2 ? 'dark' : 'light';
   }
 
   function applyWordmark() {
     const text = (settings.wordmark || '').trim();
     wordmarkEl.textContent = text;
     wordmarkEl.hidden = !text;
+    /* 签名显隐会移动控件位置，孔位/透光区需跟随 */
+    if (EHP.holes) EHP.holes.schedule();
   }
 
   function applyPlaceholder() {
@@ -88,11 +77,29 @@
     searchInput.placeholder = text || EHP.storage.DEFAULT_SETTINGS.placeholder;
   }
 
+  /* 光照：一切由物理几何推导（圆盘剖面 / 半影宽度），此处只把参数推给 holes.js */
+  function applyLight() {
+    EHP.holes.applyLightSettings(settings.light);
+  }
+
+  /* 关于区的版本号：从 manifest 读，**不要**在 HTML 里写死——v2.0.0 发版时就漏改过一次
+     （页面里还写着 v1.3.0）。HTML 里 `#about-version` 的文本只是兜底，
+     用于非扩展环境（直接用浏览器打开 newtab.html）时仍能显示一个版本号。 */
+  function applyVersion() {
+    const el = document.getElementById('about-version');
+    if (!el || !window.chrome || !chrome.runtime || !chrome.runtime.getManifest) return;
+    try {
+      const v = chrome.runtime.getManifest().version;
+      if (v) el.textContent = 'v' + v;
+    } catch (e) { /* 忽略：保留 HTML 里的兜底文本 */ }
+  }
+
   function applyAll() {
-    applyTheme();
-    applyAccent();
+    applyAppearance();
     applyWordmark();
     applyPlaceholder();
+    applyVersion();
+    applyLight();
   }
 
   async function save() {
@@ -105,13 +112,15 @@
     drawer.classList.add('open');
     drawer.setAttribute('aria-hidden', 'false');
     backdrop.hidden = false;
-    refreshCropPreview(); /* 视口尺寸可能已变化，刷新预览比例 */
+    /* 开合动画 = 齿轮孔洞长成整页高的大圆角矩形（面板本身不动） */
+    if (EHP.holes) EHP.holes.setPanel(true);
   }
 
   function closeDrawer() {
     drawer.classList.remove('open');
     drawer.setAttribute('aria-hidden', 'true');
     backdrop.hidden = true;
+    if (EHP.holes) EHP.holes.setPanel(false);
   }
 
   /* ---------- Toast ---------- */
@@ -201,182 +210,42 @@
 
   /* ---------- 控件渲染与绑定 ---------- */
 
-  function renderThemeSwitch() {
-    Array.prototype.forEach.call(themeSwitch.querySelectorAll('button'), function (b) {
-      b.classList.toggle('active', b.dataset.themeValue === settings.theme);
-    });
+  function syncLightLabels() {
+    const L = settings.light;
+    lightDiameterVal.textContent = L.diameter + 'px';
+    lightIntensityVal.textContent = Math.round(L.intensity * 100) + '%';
+    lightHeightVal.textContent = String(L.height);
+    lightGapVal.textContent = String(L.gap);
+    lightAmbientVal.textContent = L.ambient + '%';
   }
 
-  function buildSwatches() {
-    swatchWrap.textContent = '';
-    ACCENTS.forEach(function (a) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'swatch' + (a.color.toLowerCase() === settings.accent.toLowerCase() ? ' active' : '');
-      b.style.background = a.color;
-      b.title = a.name;
-      b.addEventListener('click', function () {
-        settings.accent = a.color;
-        save();
-        applyAccent();
-        Array.prototype.forEach.call(swatchWrap.children, function (el) {
-          el.classList.remove('active');
-        });
-        b.classList.add('active');
-      });
-      swatchWrap.appendChild(b);
-    });
-  }
-
-  /* ---------- 图片：宽度 / 裁剪 ---------- */
-
-  /* 面板宽高比 = (宽度% × 视口宽) / 视口高，预览框按此比例呈现 */
-  function panelAspect() {
-    return ((settings.imageWidth || 33) / 100) * window.innerWidth / window.innerHeight;
-  }
-
-  function refreshCropPreview() {
-    const H = 150;
-    const W = Math.max(80, Math.min(320, Math.round(H * panelAspect())));
-    cropPreview.style.height = H + 'px';
-    cropPreview.style.width = W + 'px';
-    if (bgSrc) {
-      cropPreview.style.backgroundImage = 'url("' + bgSrc + '")';
-      EHP.effects.bgLayout(cropPreview, settings.imageCrop, W, H);
-      cropEmpty.hidden = true;
-    } else {
-      cropPreview.style.backgroundImage = '';
-      cropEmpty.hidden = false;
-    }
-    const z = Math.round((settings.imageCrop.zoom || 1) * 100);
-    cropZoom.value = z;
-    cropZoomVal.textContent = z + '%';
-  }
-
-  /* 裁剪变化：面板与预览同步重排 */
-  function applyCropLive() {
-    EHP.effects.relayout(settings.imageCrop);
-    const rect = cropPreview.getBoundingClientRect();
-    EHP.effects.bgLayout(cropPreview, settings.imageCrop, rect.width, rect.height);
-  }
-
-  function saveCropDebounced() {
-    clearTimeout(cropSaveTimer);
-    cropSaveTimer = setTimeout(save, 400);
-  }
-
-  function afterZoomChange() {
-    const z = Math.round((settings.imageCrop.zoom || 1) * 100);
-    cropZoom.value = z;
-    cropZoomVal.textContent = z + '%';
-    applyCropLive();
-    saveCropDebounced();
-  }
-
-  function bindImageControls() {
-    imageToggle.addEventListener('change', async function () {
-      settings.imageEnabled = imageToggle.checked;
-      await save();
-      await EHP.effects.applyImage(settings.imageEnabled, settings.imageCrop, settings.imageWidth);
-      if (settings.imageEnabled && !bgSrc) imageFile.click(); /* 首次开启自动引导选图 */
-    });
-
-    /* 展示区域宽度：实时拖动，防抖写盘 */
-    imgWidth.addEventListener('input', function () {
-      settings.imageWidth = Number(imgWidth.value);
-      imgWidthVal.textContent = settings.imageWidth + '%';
-      EHP.effects.setWidth(settings.imageWidth);
-      refreshCropPreview();
-      clearTimeout(widthSaveTimer);
-      widthSaveTimer = setTimeout(save, 400);
-    });
-
-    /* 裁剪预览：拖动平移（拖动方向与画面移动方向一致） */
-    cropPreview.addEventListener('mousedown', function (e) {
-      if (!bgSrc) return;
-      cropDragging = true;
-      cropDrag = { x: e.clientX, y: e.clientY, fx: settings.imageCrop.fx, fy: settings.imageCrop.fy };
-      cropPreview.classList.add('grabbing');
-      e.preventDefault();
-    });
-    window.addEventListener('mousemove', function (e) {
-      if (!cropDragging) return;
-      const rect = cropPreview.getBoundingClientRect();
-      settings.imageCrop.fx = clamp01(cropDrag.fx - (e.clientX - cropDrag.x) / rect.width);
-      settings.imageCrop.fy = clamp01(cropDrag.fy - (e.clientY - cropDrag.y) / rect.height);
-      applyCropLive();
-    });
-    window.addEventListener('mouseup', function () {
-      if (!cropDragging) return;
-      cropDragging = false;
-      cropPreview.classList.remove('grabbing');
-      saveCropDebounced();
-    });
-
-    /* 滚轮缩放（悬停在预览框上时拦截页面滚动） */
-    cropPreview.addEventListener('wheel', function (e) {
-      if (!bgSrc) return;
-      e.preventDefault();
-      settings.imageCrop.zoom = clampRange((settings.imageCrop.zoom || 1) +
-        (e.deltaY < 0 ? 0.05 : -0.05), 1, 3);
-      afterZoomChange();
-    }, { passive: false });
-
-    cropZoom.addEventListener('input', function () {
-      settings.imageCrop.zoom = clampRange(cropZoom.value / 100, 1, 3);
-      afterZoomChange();
-    });
-
-    btnPickImage.addEventListener('click', function () {
-      imageFile.click();
-    });
-
-    imageFile.addEventListener('change', async function () {
-      const f = imageFile.files && imageFile.files[0];
-      imageFile.value = '';
-      if (!f) return;
-      try {
-        const r = await EHP.effects.setImage(f);
-        settings.imageCrop = { fx: 0.5, fy: 0.5, zoom: 1, iw: r.iw, ih: r.ih };
-        bgSrc = (await EHP.storage.get(KEY.bgImage, '')) || '';
-        settings.imageEnabled = true;
-        imageToggle.checked = true;
-        await save();
-        await EHP.effects.applyImage(true, settings.imageCrop, settings.imageWidth);
-        refreshCropPreview();
-        showToast('展示图片已更新');
-      } catch (err) {
-        showToast('图片处理失败：' + (err && err.message ? err.message : err));
-      }
-    });
-
-    armConfirm(btnRemoveImage, '移除', async function () {
-      await EHP.effects.removeImage();
-      bgSrc = '';
-      settings.imageEnabled = false;
-      imageToggle.checked = false;
-      settings.imageCrop = { fx: 0.5, fy: 0.5, zoom: 1, iw: 0, ih: 0 };
-      await save();
-      refreshCropPreview();
-      showToast('已移除展示图片');
-    });
+  function saveLightDebounced() {
+    clearTimeout(lightSaveTimer);
+    lightSaveTimer = setTimeout(save, 400);
   }
 
   function bind() {
-    settingsBtn.addEventListener('click', openDrawer);
-    closeBtn.addEventListener('click', closeDrawer);
+    /* 齿轮是唯一的开/关按钮：展开状态下再点一次即收回 */
+    settingsBtn.addEventListener('click', function () {
+      if (drawer.classList.contains('open')) closeDrawer();
+      else openDrawer();
+    });
     backdrop.addEventListener('mousedown', closeDrawer);
 
-    themeSwitch.addEventListener('click', function (e) {
-      const btn = e.target.closest('button[data-theme-value]');
-      if (!btn) return;
-      settings.theme = btn.dataset.themeValue;
-      save();
-      applyTheme();
-      renderThemeSwitch();
+    /* 上下表面配色：即时生效（文字明暗自动跟随），防抖写盘 */
+    sheetColorInput.addEventListener('input', function () {
+      settings.sheetColor = sheetColorInput.value;
+      applyAppearance();
+      saveLightDebounced();
     });
 
-    /* 签名输入：即时预览，防抖写盘 */
+    groundBgInput.addEventListener('input', function () {
+      settings.groundBg = groundBgInput.value;
+      applyAppearance();
+      saveLightDebounced();
+    });
+
+    /* 签名 / 提示语：即时预览，防抖写盘 */
     wordmarkInput.addEventListener('input', function () {
       settings.wordmark = wordmarkInput.value;
       applyWordmark();
@@ -384,7 +253,6 @@
       wordmarkTimer = setTimeout(save, 300);
     });
 
-    /* 搜索框提示语：即时预览，防抖写盘 */
     placeholderInput.addEventListener('input', function () {
       settings.placeholder = placeholderInput.value;
       applyPlaceholder();
@@ -392,61 +260,67 @@
       placeholderTimer = setTimeout(save, 300);
     });
 
-    /* 鼠标光晕：开关 + 颜色 */
-    glowToggle.addEventListener('change', function () {
-      settings.glow.enabled = glowToggle.checked;
-      save();
-      EHP.effects.applyGlow(settings.glow);
+    /* 光照：光色 / 光源直径 / 光源强度 / 光源高度 / 层间距 / 环境光 —— 全部即时生效 */
+    lightColor.addEventListener('input', function () {
+      settings.light.color = lightColor.value;
+      applyLight();
+      saveLightDebounced();
     });
 
-    glowColor.addEventListener('input', function () {
-      settings.glow.color = glowColor.value;
-      EHP.effects.applyGlow(settings.glow);
-      clearTimeout(glowColorTimer);
-      glowColorTimer = setTimeout(save, 300);
+    lightDiameter.addEventListener('input', function () {
+      settings.light.diameter = Number(lightDiameter.value);
+      syncLightLabels();
+      applyLight();
+      saveLightDebounced();
     });
 
-    glowSize.addEventListener('input', function () {
-      settings.glow.size = Number(glowSize.value);
-      glowSizeVal.textContent = settings.glow.size + 'px';
-      EHP.effects.applyGlow(settings.glow);
-      clearTimeout(glowSizeTimer);
-      glowSizeTimer = setTimeout(save, 400);
+    lightIntensity.addEventListener('input', function () {
+      settings.light.intensity = Number(lightIntensity.value) / 100;
+      syncLightLabels();
+      applyLight();
+      saveLightDebounced();
     });
 
-    glowOpacity.addEventListener('input', function () {
-      settings.glow.opacity = glowOpacity.value / 100;
-      glowOpacityVal.textContent = glowOpacity.value + '%';
-      EHP.effects.applyGlow(settings.glow);
-      clearTimeout(glowOpacityTimer);
-      glowOpacityTimer = setTimeout(save, 400);
+    lightHeight.addEventListener('input', function () {
+      settings.light.height = Number(lightHeight.value);
+      syncLightLabels();
+      applyLight();
+      saveLightDebounced();
     });
 
-    bindImageControls();
+    lightGap.addEventListener('input', function () {
+      settings.light.gap = Number(lightGap.value);
+      syncLightLabels();
+      applyLight();
+      saveLightDebounced();
+    });
+
+    lightAmbient.addEventListener('input', function () {
+      settings.light.ambient = Number(lightAmbient.value);
+      syncLightLabels();
+      applyLight();
+      saveLightDebounced();
+    });
+
     bindDataActions();
   }
 
+
   async function init() {
     settings = EHP.storage.sanitizeSettings(await EHP.storage.get(KEY.settings, {}));
-    bgSrc = (await EHP.storage.get(KEY.bgImage, '')) || '';
     applyAll();
     bind();
-    renderThemeSwitch();
-    buildSwatches();
+    sheetColorInput.value = settings.sheetColor;
+    groundBgInput.value = settings.groundBg;
     wordmarkInput.value = settings.wordmark;
     placeholderInput.value = settings.placeholder;
-    glowToggle.checked = settings.glow.enabled;
-    glowColor.value = settings.glow.color;
-    glowSize.value = settings.glow.size;
-    glowSizeVal.textContent = settings.glow.size + 'px';
-    glowOpacity.value = Math.round(settings.glow.opacity * 100);
-    glowOpacityVal.textContent = Math.round(settings.glow.opacity * 100) + '%';
-    imageToggle.checked = settings.imageEnabled;
-    imgWidth.value = settings.imageWidth;
-    imgWidthVal.textContent = settings.imageWidth + '%';
-    refreshCropPreview();
-    EHP.effects.applyGlow(settings.glow);
-    EHP.effects.applyImage(settings.imageEnabled, settings.imageCrop, settings.imageWidth, true);
+    lightColor.value = settings.light.color;
+    lightDiameter.value = settings.light.diameter;
+    lightIntensity.value = Math.round(settings.light.intensity * 100);
+    lightHeight.value = settings.light.height;
+    lightGap.value = settings.light.gap;
+    lightAmbient.value = settings.light.ambient;
+    syncLightLabels();
   }
 
   EHP.settings = { init: init, close: closeDrawer };

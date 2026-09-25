@@ -27,6 +27,8 @@
   async function init() {
     engine = await EHP.storage.get(EHP.storage.KEY.engine, 'bing');
     renderSwitch();
+    /* 首次按存储里的引擎"直接落位"：不要先按 HTML 默认引擎挖孔再滑过来 */
+    if (EHP.holes) EHP.holes.engineJump();
 
     switchEl.addEventListener('click', function (e) {
       const btn = e.target.closest('button[data-engine]');
@@ -34,6 +36,7 @@
       engine = btn.dataset.engine;
       EHP.storage.set(EHP.storage.KEY.engine, engine);
       renderSwitch();
+      if (EHP.holes) EHP.holes.schedule(); /* 让孔洞滑到新选中的图标上 */
       input.focus();
       onInput();
     });

@@ -29,11 +29,16 @@
 
   (async function boot() {
     await EHP.storage.ensureDefaults();
-    await EHP.settings.init(); /* 先应用主题/强调色/签名，避免加载闪色 */
+    await EHP.settings.init(); /* 先应用上下表面背景色/文字明暗/签名，避免加载闪色 */
     EHP.net.start();
-    EHP.search.init();
-    EHP.shortcuts.init();
+    /* 先让各模块拿到存储里的状态（引擎、磁贴）再统一挖孔：
+       否则会先按 HTML 默认状态挖一次孔，再"切换"到真实状态（开页时可见的多余动画） */
+    await EHP.search.init();
+    await EHP.shortcuts.init();
     bindKeys();
     input.focus();
+    /* 壁孔跟随控件位置：启动后立即 + 延迟兜底（字体/图标加载可能引起布局微调） */
+    EHP.holes.schedule();
+    setTimeout(function () { EHP.holes.schedule(); }, 200);
   })();
 })();

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Explorer Home Page",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "浏览器主页扩展：网络状态角标、Bing/Google 双引擎搜索与本地历史联想、可配置快捷方式。",
   "icons": {
     "16": "icons/icon16.png",

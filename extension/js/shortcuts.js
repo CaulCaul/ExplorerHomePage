@@ -7,8 +7,6 @@
   const EHP = window.EHP;
   const KEY = EHP.storage.KEY;
 
-  const SVG_PENCIL = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25zM20.7 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
-
   const grid = document.getElementById('shortcuts');
   const overlay = document.getElementById('overlay');
   const titleEl = document.getElementById('modal-title');
@@ -71,6 +69,8 @@
     grid.textContent = '';
     shortcuts.forEach(function (sc) { grid.appendChild(tile(sc)); });
     grid.appendChild(addTile());
+    /* 磁贴数量/排序变化：同步上层装饰（标题/虚线框/每磁贴孔位） */
+    if (EHP.holes) EHP.holes.syncTiles();
   }
 
   function tile(sc) {
@@ -87,34 +87,24 @@
     const icon = document.createElement('span');
     icon.className = 'tile-icon';
     icon.textContent = (sc.title || sc.url).trim().charAt(0).toUpperCase() || '?';
-    icon.style.background = letterColor(sc.url);
+    /* 字母色相注入 CSS 变量：背景保持透明（与下层一致），颜色由主题分档保证可读 */
+    icon.style.setProperty('--letter-h', String(letterHue(sc.url)));
 
     const title = document.createElement('span');
-    title.className = 'tile-title';
+    title.className = 'tile-title'; /* 仅占位维持布局，实际渲染在上层装饰层 */
     title.textContent = sc.title;
 
     a.appendChild(icon);
     a.appendChild(title);
     el.appendChild(a);
 
-    const edit = document.createElement('button');
-    edit.type = 'button';
-    edit.className = 'tile-edit';
-    edit.title = '编辑';
-    edit.innerHTML = SVG_PENCIL;
-    edit.addEventListener('click', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      openModal(sc);
-    });
-    el.appendChild(edit);
+    /* 注：悬停态由 holes.js 的命中测试驱动（图标孔 ∪ 名称），
+       编辑入口是上层装饰层里的"名称 + 铅笔"，点击时调 EHP.shortcuts.edit(id) */
 
-    /* 异步补图标：缓存命中或联网抓取成功后替换字母色块 */
+    /* 异步补图标：缓存命中或联网抓取成功后替换首字母 */
     fillIcon(sc.url).then(function (dataUrl) {
       if (!dataUrl) return;
       icon.textContent = '';
-      icon.style.background = '';
-      icon.classList.add('has-img');
       const img = document.createElement('img');
       img.src = dataUrl;
       img.alt = '';
@@ -126,7 +116,7 @@
 
   function addTile() {
     const el = document.createElement('div');
-    el.className = 'tile';
+    el.className = 'tile tile-add'; /* 无 data-id：不挖孔，虚线框完全在上层 */
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'tile-link';
@@ -134,13 +124,13 @@
     const plus = document.createElement('span');
     plus.className = 'tile-plus';
     plus.textContent = '+';
-    const title = document.createElement('span');
-    title.className = 'tile-title';
-    title.textContent = '添加';
+    const slot = document.createElement('span');
+    slot.className = 'tile-title'; /* 占位，与其他磁贴等高（上层不再绘制文字） */
     btn.appendChild(plus);
-    btn.appendChild(title);
+    btn.appendChild(slot);
     btn.addEventListener('click', function () { openModal(null); });
     el.appendChild(btn);
+    /* 悬停态同样由 holes.js 命中测试驱动（虚线框在上层，需与下层占位对齐） */
     return el;
   }
 
@@ -215,6 +205,7 @@
       const rect = target.getBoundingClientRect();
       const after = (e.clientX - rect.left) > rect.width / 2;
       grid.insertBefore(dragEl, after ? target.nextSibling : target);
+      if (EHP.holes) EHP.holes.schedule(); /* 拖动中实时更新孔位与装饰 */
     });
 
     grid.addEventListener('dragend', function () {
@@ -295,7 +286,11 @@
     const title = rawName || u.hostname.replace(/^www\./, '');
     if (editingId) {
       const idx = shortcuts.findIndex(function (s) { return s.id === editingId; });
-      if (idx >= 0) shortcuts[idx] = { id: editingId, title: title, url: u.href };
+      /* 就地修改而非替换对象：避免外部仍持有旧引用的地方（如装饰层闭包）读到旧值 */
+      if (idx >= 0) {
+        shortcuts[idx].title = title;
+        shortcuts[idx].url = u.href;
+      }
     } else {
       shortcuts.push({ id: newId(), title: title, url: u.href });
     }
@@ -316,12 +311,19 @@
     return 'sc-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   }
 
-  function letterColor(url) {
+  function letterHue(url) {
     let h = 0;
     const s = url || '';
     for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-    return 'hsl(' + (Math.abs(h) % 360) + ' 45% 38%)';
+    return Math.abs(h) % 360;
   }
 
-  EHP.shortcuts = { init: init, closeModal: closeModal };
+  /* 打开某个快捷方式的编辑弹窗（供上层装饰层的"名称"调用）。
+     ⚠ 必须现查 shortcuts 数组：磁贴重渲染后上层可能持有旧节点/旧对象 */
+  function edit(id) {
+    const sc = shortcuts.find(function (s) { return s.id === id; });
+    if (sc) openModal(sc);
+  }
+
+  EHP.shortcuts = { init: init, closeModal: closeModal, edit: edit };
 })();

@@ -12,8 +12,7 @@
     shortcuts: 'shortcuts',    // [{ id, title, url }]
     history: 'searchHistory',  // [{ q, engine, ts }] 新→旧
     iconCache: 'iconCache',    // { domain: dataURL }
-    settings: 'settings',      // { wordmark, theme, accent, glow, imageEnabled } 外观设置
-    bgImage: 'bgImage'         // 展示图片 dataURL（压缩后；不随导出）
+    settings: 'settings'       // { wordmark, placeholder, sheetColor, groundBg, light } 外观与光影
   };
 
   const HISTORY_CAP = 1000;   // 最多保留 1000 条搜索历史
@@ -22,39 +21,44 @@
   const DEFAULT_SETTINGS = {
     wordmark: 'EXPLORER HOME', // 签名文字，空字符串则隐藏
     placeholder: 'What shall we explore?', // 搜索框提示语，空字符串恢复默认
-    theme: 'light',            // 'light' | 'dark'
-    accent: '#6366f1',         // 强调色（#rrggbb）
-    glow: { enabled: false, color: '#6366f1', size: 700, opacity: 0.5 }, // 鼠标光晕（size: px，200–1200；opacity: 0.1–1）
-    imageEnabled: false,       // 左侧图片展示
-    imageWidth: 33,            // 展示区域宽度（vw 百分比，15–50）
-    imageCrop: { fx: 0.5, fy: 0.5, zoom: 1, iw: 0, ih: 0 } // 裁剪：焦点(0-1)+缩放(1-3)+原图尺寸
+    sheetColor: '#eef2f8',     // 上表面（粗布）颜色
+    groundBg: '#eff3f9',       // 下表面背景色（透过孔洞看到的那一层）
+    /* 光照：物理假设 = 一块平行于屏幕的均匀发光圆盘 + 微弱全局环境光
+       color     光色（当作光谱逐通道相乘：越暗光越弱，纯黑 = 无直射光）
+       diameter  圆盘直径(px, 200–1200)：决定受光剖面尺度与半影宽度
+       intensity 光源强度(0.1–1)：直射光最多能补多少亮度
+       height    光源到上表面的距离（世界单位，1–50，默认 10）
+       gap       上下表面之间的距离（世界单位，0.1–5，默认 1）
+       ambient   全局环境光(0–60%)：唯一决定亮度下限（看不到光源处 = 环境光） */
+    light: {
+      color: '#6366f1', diameter: 700, intensity: 0.5,
+      height: 10, gap: 1, ambient: 30
+    }
   };
 
-  /* 防御性清洗：兼容历史遗留/导入数据 */
+  /* 防御性清洗：兼容历史遗留/导入数据（旧版 image* 丢弃，旧版 glow.* 迁移到 light.*） */
   function sanitizeSettings(s) {
     s = s && typeof s === 'object' ? s : {};
     const g = s.glow && typeof s.glow === 'object' ? s.glow : {};
-    const c = s.imageCrop && typeof s.imageCrop === 'object' ? s.imageCrop : {};
+    const l = s.light && typeof s.light === 'object' ? s.light : {};
+    const D = DEFAULT_SETTINGS.light;
     const num = function (v, d) { return typeof v === 'number' && isFinite(v) ? v : d; };
+    const hex = function (v, d) { return /^#[0-9a-f]{6}$/i.test(v) ? v : d; };
+    const dark = s.theme === 'dark'; /* 旧版主题开关 → 迁移为深色配色 */
+    /* 上表面颜色：旧版双色砖块统一取"颜色 1"，更旧的单一 sheetBg 直接用 */
+    const legacySheet = hex(s.sheetColor, hex(s.sheetBg1, hex(s.sheetBg, dark ? '#161f3a' : DEFAULT_SETTINGS.sheetColor)));
     return {
       wordmark: typeof s.wordmark === 'string' ? s.wordmark.slice(0, 30) : DEFAULT_SETTINGS.wordmark,
       placeholder: typeof s.placeholder === 'string' ? s.placeholder.slice(0, 60) : DEFAULT_SETTINGS.placeholder,
-      theme: s.theme === 'dark' ? 'dark' : 'light',
-      accent: /^#[0-9a-f]{6}$/i.test(s.accent) ? s.accent : DEFAULT_SETTINGS.accent,
-      glow: {
-        enabled: !!g.enabled,
-        color: /^#[0-9a-f]{6}$/i.test(g.color) ? g.color : DEFAULT_SETTINGS.glow.color,
-        size: Math.min(1200, Math.max(200, Math.round(num(g.size, 700)))),
-        opacity: Math.min(1, Math.max(0.1, num(g.opacity, 0.5)))
-      },
-      imageEnabled: !!s.imageEnabled,
-      imageWidth: Math.min(50, Math.max(15, Math.round(num(s.imageWidth, 33)))),
-      imageCrop: {
-        fx: Math.min(1, Math.max(0, num(c.fx, 0.5))),
-        fy: Math.min(1, Math.max(0, num(c.fy, 0.5))),
-        zoom: Math.min(3, Math.max(1, num(c.zoom, 1))),
-        iw: Math.max(0, Math.round(num(c.iw, 0))),
-        ih: Math.max(0, Math.round(num(c.ih, 0)))
+      sheetColor: legacySheet,
+      groundBg: hex(s.groundBg, dark ? '#0f172a' : DEFAULT_SETTINGS.groundBg),
+      light: {
+        color: hex(l.color, hex(g.color, D.color)),
+        diameter: Math.min(1200, Math.max(200, Math.round(num(l.diameter, num(g.size, D.diameter))))),
+        intensity: Math.min(1, Math.max(0.1, num(l.intensity, num(l.tint, num(g.opacity, D.intensity))))),
+        height: Math.min(50, Math.max(1, num(l.height, D.height))),
+        gap: Math.min(5, Math.max(0.1, num(l.gap, D.gap))),
+        ambient: Math.min(60, Math.max(0, Math.round(num(l.ambient, D.ambient))))
       }
     };
   }

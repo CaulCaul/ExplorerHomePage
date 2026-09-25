@@ -10,5 +10,6 @@ desktop.ini
 .vscode/
 .idea/
 
-# 发布打包产物（GitHub Releases 附件，不入库）
+# 发布打包产物（GitHub Releases 附件，不入库；仓库只保留源码与 README 截图）
 dist/
+*.zip
