@@ -356,7 +356,9 @@
 
   /* ---------- 鼠标：光源位置、透光区、命中测试 ---------- */
 
-  const mouse = { x: -1e5, y: -1e5, seen: false };
+  /* seen = 光标是否出现过（决定受光点是否居中：开页还没动鼠标时用画面中心）
+     away = 指针当前是否在窗口之外（此时**保持离开前的光影**，只是不再参与悬停命中） */
+  const mouse = { x: -1e5, y: -1e5, seen: false, away: false };
   let mouseRaf = null;
   let lastShadowX = null;
   let lastShadowY = null;
@@ -376,7 +378,9 @@
      （曾导致受光区永久停在画面中心、只有阴影跟随鼠标）。
      ⚠ 刻意**不做**量化/限流（用户明确要求"不要限制帧率和鼠标抖动"）：每帧写的就是真实光标位置。
      代价是引用这两个变量的三条整屏径向渐变会重新栅格化 + 重新 multiply 合成，
-     鼠标移动时 GPU 占用偏高即来源于此；要真正降下来只能改结构（见 AGENTS.md 第 21/22 条）。 */
+     鼠标移动时 GPU 占用偏高即来源于此；要真正降下来只能改结构（见 AGENTS.md 第 21/22 条）。
+     ⚠ 上面的「未动鼠标 → 回中心」分支只在开页时走一次：指针移出窗口**不再**回到中心
+     （clearPointer 只标记 away），否则离开与回来时受光点会各跳一次，看起来就是抖动。 */
   function applySheetLight() {
     const root = document.documentElement.style;
     if (!mouse.seen) {
@@ -406,8 +410,11 @@
   }
 
   /* 悬停：**只有指向名称**才进入悬停态（图标上不播编辑动画，
-     否则鼠标只是路过图标就会闪出下划线与铅笔） */
+     否则鼠标只是路过图标就会闪出下划线与铅笔）。
+     ⚠ 指针在窗口外时必须直接清空命中：布局变化（缩放/滚动/磁贴重排）也会调用本函数，
+     否则会拿"离开前留下的旧坐标"重新点亮某个名称 —— 指针明明不在窗口里，铅笔却冒出来。 */
   function applyHover() {
+    if (mouse.away) { resetHover(); return; }
     let hit = null;
     Object.keys(tiles).forEach(function (id) {
       if (inRect(tiles[id].titleHit, mouse.x, mouse.y)) hit = id;
@@ -440,6 +447,7 @@
     mouse.x = e.clientX;
     mouse.y = e.clientY;
     mouse.seen = true;
+    mouse.away = false;
     scheduleMouseDriven();
   });
 
@@ -452,14 +460,15 @@
     }
   }
 
-  /* 指针离开窗口：光源回到中心 */
+  /* 指针离开窗口 / 窗口失焦：**停在离开前的状态**（受光点与所有透光区都不动）。
+     旧实现把 seen 置回 false 并强刷一次：受光点跳回画面中心、透光区偏移全部归零 ——
+     离开窗口的瞬间整套光影"啪"地变一次、移回来又变回去，这就是看到的抖动。
+     现在只标记 away（供 applyHover 停止命中），不碰 --lx/--ly 与透光区几何；
+     lastShadowX/Y 也保留，移回来时继续按同一基准做 2px 阈值判断。 */
   function clearPointer() {
-    mouse.seen = false;
-    lastShadowX = null;
-    lastShadowY = null;
+    if (mouse.away) return;
+    mouse.away = true;
     resetHover();
-    applySheetLight();
-    applyShadow(true);
   }
 
   document.addEventListener('mouseleave', clearPointer);
