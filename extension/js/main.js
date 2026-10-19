@@ -36,7 +36,7 @@
     await EHP.search.init();
     await EHP.shortcuts.init();
     bindKeys();
-    input.focus();
+    EHP.search.focusQuiet(); /* 开页自动聚焦搜索框，但**不**弹出候选列表 */
     /* 壁孔跟随控件位置：启动后立即 + 延迟兜底（字体/图标加载可能引起布局微调） */
     EHP.holes.schedule();
     setTimeout(function () { EHP.holes.schedule(); }, 200);
