@@ -1,6 +1,6 @@
 /* Explorer Home Page — 挖孔、光照/遮挡阴影、上层装饰与命中测试
  *
- * 层结构（z-index）：下表面基底(0) < 控件(1) < 下表面光照+遮挡阴影(2) < 板材(3) < 装饰/签名(4) < 上表面光照(5) < 候选下拉(6) < 抽屉/弹窗/Toast(80+)
+ * 层结构（z-index）：下表面基底(0) < 控件/设置面板(1) < 下表面光照+遮挡阴影(2) < 板材(3) < 装饰/签名(4) < 上表面光照(5) < 候选下拉(6) < 弹窗/Toast(80+)
  *   ⚠ 控件必须在**下表面光照层之下**（否则阴影压到图标上时图标还是亮的）；
  *     签名/标题/边框必须在**上表面光照层之下**（否则它们完全不受光照影响）。
  *
@@ -18,7 +18,8 @@
  *   遮挡阴影的烘培值是 环境光 / 下表面光照，正好把直射光那一份"除"掉 → 阴影区只剩环境光。
  *   偏移上限取视口对角线的一半（旧版固定 120px 会导致远处的角标透光区不再移动）。
  *
- * 悬停：用缓存 rect 做命中测试（图标孔 ∪ 编辑按钮）驱动，不依赖下层 mouseenter（避免抖动）。
+ * 渲染：光斑和未触及偏移上限的孔洞投影可独立平移。高斯模糊应用在平移前的透光区并集上。
+ * 悬停：用缓存的名称 rect 做命中测试。
  */
 (function () {
   'use strict';
@@ -58,13 +59,13 @@
   let engineFrame = null;    /* 上表面外扩边框（与搜索框同高，框住两个图标） */
   let engineSnap = false;    /* 下一次更新直接落位（不播放滑动动画）：用于首次加载 */
 
-  /* 设置面板：孔洞的展开/收回（面板本身不做位移，全靠孔洞几何驱动） */
+  /* 共用一个展开进度，跨屏时可按新的齿轮和面板尺寸重建当前帧。 */
   const PANEL_RX = 22;       /* ⚠ 必须与 .drawer 的 border-radius 一致 */
-  let panelTarget = null;
-  let panelShown = null;
+  let panelBounds = null;
+  let panelOrigin = null;
+  let panelProgress = 0;
   let panelRaf = null;
   let panelOpen = false;     /* 目标状态（true = 展开） */
-  let panelLive = false;     /* 当前是否存在这个孔 */
 
   /* ---------- 光源的逐通道光谱 ---------- */
 
@@ -80,10 +81,21 @@
   let shMax = 600;        /* 偏移上限，update() 中按视口对角线重算 */
   let lastW = 0;
   let lastH = 0;
+  let viewWidth = 0;
+  let viewHeight = 0;
+  let lightHalfWidth = 0;
+  let lightHalfHeight = 0;
+  const shadow = { padX: 0, padY: 0, x: 0, y: 0, shared: false, pointer: null };
 
   const decor = document.getElementById('tile-decor');
+  const drawer = document.getElementById('drawer');
+  const sheetLight = document.getElementById('sheet-light-field');
+  const groundLight = document.getElementById('ground-light-field');
+  const shadowLight = document.getElementById('shadow-light-field');
+  const shadowField = document.getElementById('shadow-field');
+  const lightFields = [sheetLight, groundLight, shadowLight];
 
-  /* ---------- SVG：柔化滤镜 + 三个蒙版 ---------- */
+  /* ---------- SVG：柔化滤镜、板材与阴影蒙版 ---------- */
 
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('width', '0');
@@ -127,23 +139,18 @@
 
   const sheetMask = mkMask('hole-mask', '#fff');    /* 板材挖孔：精确孔位，**边界保持锐利** */
   const shadowMask = mkMask('shadow-mask', '#fff'); /* 白 = 被板材挡住（阴影），黑 = 透光区 */
-  /* 孔洞矩形直接挂在掩版上（不做模糊）：上下表面的分界必须干净利落；
-     孔缘"向下凹陷"的观感由 WebGL 层的法线倾斜负责，而不是把边界糊掉 */
   const sheetHoles = sheetMask.el;
 
-  /* 透光区几何集中定义一次，两个蒙版各用自己的 currentColor 引用（黑/白） */
+  /* 先组合所有透光区，再模糊其并集，重叠部分只参与一次。 */
   const patches = document.createElementNS(NS, 'g');
   patches.setAttribute('id', 'lit-patches');
   defs.appendChild(patches);
 
-  function addUse(maskEl, color) {
-    const u = document.createElementNS(NS, 'use');
-    u.setAttribute('href', '#lit-patches');
-    u.setAttribute('filter', 'url(#penumbra)');
-    u.setAttribute('color', color);
-    maskEl.appendChild(u);
-  }
-  addUse(shadowMask.el, '#000');
+  const patchMask = document.createElementNS(NS, 'use');
+  patchMask.setAttribute('href', '#lit-patches');
+  patchMask.setAttribute('filter', 'url(#penumbra)');
+  patchMask.setAttribute('color', '#000');
+  shadowMask.el.appendChild(patchMask);
 
   function mkRect(parent, fill) {
     const r = document.createElementNS(NS, 'rect');
@@ -174,8 +181,8 @@
 
   function newHole() {
     return {
-      sheetRect: mkRect(sheetHoles, '#000'),        /* 板材上的孔（放进模糊组 → 孔缘柔化） */
-      patchRect: mkRect(patches, 'currentColor'),   /* 透光区（被两个蒙版引用） */
+      sheetRect: mkRect(sheetHoles, '#000'),        /* 板材上的孔 */
+      patchRect: mkRect(patches, 'currentColor'),   /* 阴影蒙版里的透光区 */
       base: null /* {x, y, w, h, rx} 布局时的精确几何 */
     };
   }
@@ -190,7 +197,6 @@
     const cr = Math.min(rx, r.height / 2);
     spec.base = { x: r.left, y: r.top, w: r.width, h: r.height, rx: cr };
     setRect(spec.sheetRect, r.left, r.top, r.width, r.height, cr);
-    shapePatch(spec);
   }
 
   /* 透光区 = 孔按 (1 + gapK) 放大，向远离光源方向偏移 dist × gapK，
@@ -204,19 +210,18 @@
     const s = 1 + gapK;
     let ox = 0;
     let oy = 0;
-    if (mouse.seen) {
-      const vx = (b.x + b.w / 2) - mouse.x;
-      const vy = (b.y + b.h / 2) - mouse.y;
-      const len = Math.sqrt(vx * vx + vy * vy) || 1;
-      const k = Math.min(shMax, len * gapK);
-      ox = vx / len * k;
-      oy = vy / len * k;
+    if (shadow.pointer) {
+      const vx = b.x + b.w / 2 - (shadow.shared ? viewWidth / 2 : shadow.pointer.x);
+      const vy = b.y + b.h / 2 - (shadow.shared ? viewHeight / 2 : shadow.pointer.y);
+      const scale = shadow.shared ? gapK : Math.min(gapK, shMax / (Math.hypot(vx, vy) || 1));
+      ox = vx * scale;
+      oy = vy * scale;
     }
     const w = b.w * s + patchDilation * 2;
     const h = b.h * s + patchDilation * 2;
     setRect(spec.patchRect,
-      b.x + ox - (w - b.w) / 2,
-      b.y + oy - (h - b.h) / 2,
+      shadow.padX + b.x + ox - (w - b.w) / 2,
+      shadow.padY + b.y + oy - (h - b.h) / 2,
       w, h, Math.min(b.rx * s + patchDilation, h / 2));
   }
 
@@ -360,8 +365,6 @@
      away = 指针当前是否在窗口之外（此时**保持离开前的光影**，只是不再参与悬停命中） */
   const mouse = { x: -1e5, y: -1e5, seen: false, away: false };
   let mouseRaf = null;
-  let lastShadowX = null;
-  let lastShadowY = null;
   let hoverId = null;
   let addHover = false;
 
@@ -372,37 +375,66 @@
     cb(panelSpec);
   }
 
-  /* 光源位置 → 受光点（--lx/--ly）
-     ⚠ 必须写在 :root 上：三条光照渐变（--sheet-light/--ground-light/--ground-shadow）也声明在 :root，
-     而 var() 是在「声明该自定义属性的元素」上完成替换的——写在下层元素上不会生效
-     （曾导致受光区永久停在画面中心、只有阴影跟随鼠标）。
-     ⚠ 刻意**不做**量化/限流（用户明确要求"不要限制帧率和鼠标抖动"）：每帧写的就是真实光标位置。
-     代价是引用这两个变量的三条整屏径向渐变会重新栅格化 + 重新 multiply 合成，
-     鼠标移动时 GPU 占用偏高即来源于此；要真正降下来只能改结构（见 AGENTS.md 第 21/22 条）。
-     ⚠ 上面的「未动鼠标 → 回中心」分支只在开页时走一次：指针移出窗口**不再**回到中心
-     （clearPointer 只标记 away），否则离开与回来时受光点会各跳一次，看起来就是抖动。 */
-  function applySheetLight() {
-    const root = document.documentElement.style;
-    if (!mouse.seen) {
-      root.setProperty('--lx', '50%');
-      root.setProperty('--ly', '50%');
-      return;
-    }
-    root.setProperty('--lx', mouse.x + 'px');
-    root.setProperty('--ly', mouse.y + 'px');
+  function translation(x, y) {
+    return 'translate3d(' + x + 'px, ' + y + 'px, 0)';
   }
 
-  /* 光源移动 → 重算所有透光区（模糊后的大面积渐变，2px 内不重算；
-     用户明确要求不做更强节流） */
-  function applyShadow(force) {
-    if (!force && mouse.seen && lastShadowX !== null) {
-      const dx = mouse.x - lastShadowX;
-      const dy = mouse.y - lastShadowY;
-      if (dx * dx + dy * dy < 4) return;
+  function canShiftShadow(x, y) {
+    if (!shadow.pointer || Math.abs(x) > shadow.padX - 1 || Math.abs(y) > shadow.padY - 1) return false;
+    const limit = (shMax / gapK) ** 2;
+    let fits = true;
+    eachHole(function (spec) {
+      const b = spec.base;
+      if (!fits || !b) return;
+      const dx = b.x + b.w / 2 - shadow.pointer.x;
+      const dy = b.y + b.h / 2 - shadow.pointer.y;
+      fits = dx * dx + dy * dy <= limit;
+    });
+    return fits;
+  }
+
+  /* 未触及偏移上限时，所有投影共享 −gapK × 光标位移。以视口中心预画投影并模糊，
+     鼠标移动只平移蒙版所在的层。超出缓存范围或单孔需要钳位时，沿用原逐孔投影。 */
+  function applyShadow(rebuild, changedHole) {
+    const moved = mouse.seen && (!shadow.pointer ||
+      (mouse.x - shadow.pointer.x) ** 2 + (mouse.y - shadow.pointer.y) ** 2 >= 4);
+    if (!rebuild && !moved && !changedHole) return;
+    if (mouse.seen && (rebuild || moved)) shadow.pointer = { x: mouse.x, y: mouse.y };
+
+    const x = shadow.pointer ? (viewWidth / 2 - shadow.pointer.x) * gapK : 0;
+    const y = shadow.pointer ? (viewHeight / 2 - shadow.pointer.y) * gapK : 0;
+    const shared = canShiftShadow(x, y);
+    const redraw = rebuild || shared !== shadow.shared || (moved && !shared);
+    shadow.shared = shared;
+    shadow.x = shared ? x : 0;
+    shadow.y = shared ? y : 0;
+    shadowField.style.transform = translation(shadow.x, shadow.y);
+    if (redraw) eachHole(shapePatch);
+    else if (changedHole) shapePatch(changedHole);
+  }
+
+  function moveLighting(rebuild, changedHole) {
+    applyShadow(rebuild, changedHole);
+    const x = mouse.seen ? mouse.x : viewWidth / 2;
+    const y = mouse.seen ? mouse.y : viewHeight / 2;
+    /* 光斑居中绘制。宽/高各留一个视口的半径，也覆盖跨屏后暂时落在视口外的上次坐标。 */
+    const halfWidth = Math.ceil(Math.max(viewWidth, x, viewWidth - x)) + 1;
+    const halfHeight = Math.ceil(Math.max(viewHeight, y, viewHeight - y)) + 1;
+    if (halfWidth !== lightHalfWidth || halfHeight !== lightHalfHeight) {
+      lightHalfWidth = halfWidth;
+      lightHalfHeight = halfHeight;
+      lightFields.forEach(function (field) {
+        field.style.width = 2 * halfWidth + 'px';
+        field.style.height = 2 * halfHeight + 'px';
+      });
     }
-    lastShadowX = mouse.x;
-    lastShadowY = mouse.y;
-    eachHole(shapePatch);
+    const left = x - halfWidth;
+    const top = y - halfHeight;
+    const position = translation(left, top);
+    sheetLight.style.transform = position;
+    groundLight.style.transform = position;
+    /* 阴影层在移动的蒙版里反向补偿，渐变的圆心仍是实际光标位置。 */
+    shadowLight.style.transform = translation(left + shadow.padX - shadow.x, top + shadow.padY - shadow.y);
   }
 
   function inRect(r, x, y) {
@@ -433,8 +465,7 @@
 
   function updateMouseDriven() {
     mouseRaf = null;
-    applySheetLight();
-    applyShadow(false);
+    moveLighting(false);
     applyHover();
   }
 
@@ -463,8 +494,7 @@
   /* 指针离开窗口 / 窗口失焦：**停在离开前的状态**（受光点与所有透光区都不动）。
      旧实现把 seen 置回 false 并强刷一次：受光点跳回画面中心、透光区偏移全部归零 ——
      离开窗口的瞬间整套光影"啪"地变一次、移回来又变回去，这就是看到的抖动。
-     现在只标记 away（供 applyHover 停止命中），不碰 --lx/--ly 与透光区几何；
-     lastShadowX/Y 也保留，移回来时继续按同一基准做 2px 阈值判断。 */
+     只标记 away 并清空悬停命中，保留光源位置和上次阴影的 2px 阈值基准。 */
   function clearPointer() {
     if (mouse.away) return;
     mouse.away = true;
@@ -495,7 +525,6 @@
   function applyEngineSpec(r) {
     engineSpec.base = { x: r.x, y: r.y, w: r.w, h: r.h, rx: r.rx };
     setRect(engineSpec.sheetRect, r.x, r.y, r.w, r.h, r.rx);
-    shapePatch(engineSpec);
   }
 
   function engineTick() {
@@ -512,6 +541,7 @@
       Math.abs(t.w - engineShown.w) < 0.3 && Math.abs(t.h - engineShown.h) < 0.3;
     if (near) engineShown = { x: t.x, y: t.y, w: t.w, h: t.h, rx: t.rx };
     applyEngineSpec(engineShown);
+    moveLighting(false, engineSpec);
     if (!near) engineRaf = requestAnimationFrame(engineTick);
   }
 
@@ -574,31 +604,40 @@
 
   let rafId = null;
 
-  function update() {
-    rafId = null;
+  function setMaskBounds(mask, x, y, width, height) {
+    [mask.el, mask.base].forEach(function (el) {
+      el.setAttribute('x', String(x));
+      el.setAttribute('y', String(y));
+      el.setAttribute('width', String(width));
+      el.setAttribute('height', String(height));
+    });
+  }
+
+  function layoutLighting(force) {
     const W = window.innerWidth;
     const H = window.innerHeight;
-    /* 偏移上限 = 视口对角线的一半：保证光源拉到远处时透光区能真正移出孔外 */
+    const width = document.documentElement.clientWidth;
+    const height = document.documentElement.clientHeight;
+    if (!force && W === lastW && H === lastH && width === viewWidth && height === viewHeight) return;
+    lastW = W;
+    lastH = H;
+    viewWidth = width;
+    viewHeight = height;
     shMax = Math.round(Math.sqrt(W * W + H * H) * 0.5);
 
-    /* 视口变化会影响剖面渐变的取样半径，重烘一次 */
-    if (W !== lastW || H !== lastH) {
-      lastW = W;
-      lastH = H;
-      buildLightGradients();
-    }
+    /* 常规设置下留出完整的平移范围。极端层间距下限制缓存的大小，超出的帧走原投影。 */
+    const padding = Math.min(gapK, 1) / 2;
+    shadow.padX = Math.ceil(width * padding) + 2;
+    shadow.padY = Math.ceil(height * padding) + 2;
+    shadowField.style.inset = -shadow.padY + 'px ' + -shadow.padX + 'px';
+    setMaskBounds(shadowMask, 0, 0, width + 2 * shadow.padX, height + 2 * shadow.padY);
+    setMaskBounds(sheetMask, -400, -400, W + 800, H + 800);
+    buildLightGradients();
+  }
 
-    /* 三个蒙版的白/黑底与区域都显式覆盖全屏（含外扩余量） */
-    [sheetMask, shadowMask].forEach(function (m) {
-      m.base.setAttribute('x', '-400');
-      m.base.setAttribute('y', '-400');
-      m.base.setAttribute('width', String(W + 800));
-      m.base.setAttribute('height', String(H + 800));
-      m.el.setAttribute('x', '-400');
-      m.el.setAttribute('y', '-400');
-      m.el.setAttribute('width', String(W + 800));
-      m.el.setAttribute('height', String(H + 800));
-    });
+  function update() {
+    rafId = null;
+    layoutLighting(false);
 
     /* 固定控件孔位（控件的明暗由其上方的 #ground-lit/#ground-shadow 逐像素乘法给出） */
     Object.keys(FIXED).forEach(function (id) {
@@ -611,11 +650,9 @@
     positionAddTile();
     updateEngine();
     syncPanel();
-    /* 面板展开期间若磁贴被重建（例如导入数据后重渲染），新装饰元素也要重新遮挡 */
-    if (panelLive && panelShown) hideDecorOverPanel(panelShown);
 
     /* 布局变化后重算光影与悬停，保证与孔位一致 */
-    applyShadow(true);
+    moveLighting(true);
     applyHover();
   }
 
@@ -670,9 +707,9 @@
   }
 
   /* 把圆盘剖面烘成径向渐变（旋转对称 → 只需一维剖面；仅在设置/视口变化时重算）：
-     · --sheet-light   上表面光照（h = 光源高度 H）
-     · --ground-light  下表面光照（h = H + 层间距 g）
-     · --ground-shadow 遮挡阴影 = 环境光 / 下表面光照（把直射光那一份"除"掉）
+     · 上表面光照（h = 光源高度 H）
+     · 下表面光照（h = H + 层间距 g）
+     · 遮挡阴影 = 环境光 / 下表面光照
      光照倍数 = 环境光 + (1 − 环境光) × 光源强度 × 光谱 × 可见比例，
      其中 可见比例 = discProfile(d, h, R)；环境光是唯一决定亮度下限的参数。
      ⚠ 必须显式写死圆半径（circle Npx）——不写时默认 farthest-corner，
@@ -688,9 +725,7 @@
     const hDown = Math.max(1, (L.height + L.gap) * PX_PER_UNIT);
     /* 下表面中心的绝对亮度 / 上表面中心 = (R²+hUp²)/(R²+hDown²)：远一点自然暗一点 */
     const groundScale = (R * R + hUp * hUp) / (R * R + hDown * hDown);
-    const W = window.innerWidth;
-    const H = window.innerHeight;
-    const dMax = Math.max(400, Math.sqrt(W * W + H * H) * 1.15);
+    const dMax = Math.max(400, Math.sqrt(lastW * lastW + lastH * lastH) * 1.15);
     const STOPS = 12;
     const up = [];
     const down = [];
@@ -712,11 +747,10 @@
       down.push(encodeMul(mDown) + ' ' + pos);
       shade.push(encodeMul(mShade) + ' ' + pos);
     }
-    const at = 'circle ' + Math.round(dMax) + 'px at var(--lx, 50%) var(--ly, 50%)';
-    const root = document.documentElement.style;
-    root.setProperty('--sheet-light', 'radial-gradient(' + at + ', ' + up.join(', ') + ')');
-    root.setProperty('--ground-light', 'radial-gradient(' + at + ', ' + down.join(', ') + ')');
-    root.setProperty('--ground-shadow', 'radial-gradient(' + at + ', ' + shade.join(', ') + ')');
+    const at = 'circle ' + Math.round(dMax) + 'px at center';
+    sheetLight.style.backgroundImage = 'radial-gradient(' + at + ', ' + up.join(', ') + ')';
+    groundLight.style.backgroundImage = 'radial-gradient(' + at + ', ' + down.join(', ') + ')';
+    shadowLight.style.backgroundImage = 'radial-gradient(' + at + ', ' + shade.join(', ') + ')';
   }
 
   /* 光照设置 → 几何量（gapK / 半影带宽）+ 三条光照渐变 */
@@ -727,8 +761,8 @@
     patchDilation = (L.diameter / 2) * gapK;     /* 半影带宽度 = 光源半径 × g/H */
     blur.setAttribute('stdDeviation',
       Math.max(0.2, Math.min(60, patchDilation / 2)).toFixed(2));
-    buildLightGradients();
-    applyShadow(true);
+    layoutLighting(true);
+    moveLighting(true);
   }
 
   window.addEventListener('resize', schedule);
@@ -766,87 +800,79 @@
     if (engineFrame) engineFrame.style.visibility = decorIntersects(r, frameHit) ? 'hidden' : '';
   }
 
-  function applyPanelSpec(r) {
-    panelSpec.base = { x: r.x, y: r.y, w: r.w, h: r.h, rx: r.rx };
-    setRect(panelSpec.sheetRect, r.x, r.y, r.w, r.h, r.rx);
-    shapePatch(panelSpec);
-    hideDecorOverPanel(r);
-  }
+  function paintPanel() {
+    if (!panelProgress || !panelBounds || !panelOrigin) {
+      if (panelSpec.base) {
+        panelSpec.base = null;
+        hideRect(panelSpec.sheetRect);
+        hideRect(panelSpec.patchRect);
+        drawer.style.visibility = '';
+        drawer.style.clipPath = '';
+        hideDecorOverPanel(null);
+      }
+      return;
+    }
 
-  function hidePanelSpec() {
-    panelSpec.base = null;
-    hideRect(panelSpec.sheetRect);
-    hideRect(panelSpec.patchRect);
-    hideDecorOverPanel(null);
+    const from = panelOrigin;
+    const to = panelBounds;
+    const r = {
+      x: from.x + (to.x - from.x) * panelProgress,
+      y: from.y + (to.y - from.y) * panelProgress,
+      w: from.w + (to.w - from.w) * panelProgress,
+      h: from.h + (to.h - from.h) * panelProgress,
+      rx: from.rx + (to.rx - from.rx) * panelProgress
+    };
+    panelSpec.base = r;
+    setRect(panelSpec.sheetRect, r.x, r.y, r.w, r.h, r.rx);
+    /* 同一个逐帧圆角矩形，换算成面板自身的四条边距后再裁剪。 */
+    const insets = [r.y - to.y, to.x + to.w - r.x - r.w, to.y + to.h - r.y - r.h, r.x - to.x];
+    drawer.style.clipPath = 'inset(' + insets.map(function (edge) {
+      return edge.toFixed(2) + 'px';
+    }).join(' ') + ' round ' + r.rx.toFixed(2) + 'px)';
+    drawer.style.visibility = 'visible';
+    hideDecorOverPanel(r);
   }
 
   function panelTick() {
     panelRaf = null;
-    const t = panelTarget;
-    if (!t || !panelShown) return;
-    const k = 0.16; /* 略快于引擎孔洞：大孔洞滑动距离长，太快会糊 */
-    panelShown.x += (t.x - panelShown.x) * k;
-    panelShown.y += (t.y - panelShown.y) * k;
-    panelShown.w += (t.w - panelShown.w) * k;
-    panelShown.h += (t.h - panelShown.h) * k;
-    panelShown.rx += (t.rx - panelShown.rx) * k; /* 圆角也一起插值，避免最后一帧跳一下 */
-    const near = Math.abs(t.x - panelShown.x) < 0.3 && Math.abs(t.y - panelShown.y) < 0.3 &&
-      Math.abs(t.w - panelShown.w) < 0.3 && Math.abs(t.h - panelShown.h) < 0.3;
-    if (near) panelShown = { x: t.x, y: t.y, w: t.w, h: t.h, rx: t.rx };
-    applyPanelSpec(panelShown);
-    if (!near) {
-      panelRaf = requestAnimationFrame(panelTick);
-    } else if (!panelOpen) {
-      /* 收回到齿轮大小后彻底移除这个孔（避免与齿轮自己的孔重复、也省一层蒙版） */
-      hidePanelSpec();
-      panelLive = false;
+    const target = panelOpen ? 1 : 0;
+    if (panelBounds && panelOrigin) {
+      const a = panelOrigin;
+      const b = panelBounds;
+      const distance = Math.max(1, Math.abs(b.x - a.x), Math.abs(b.y - a.y),
+        Math.abs(b.w - a.w), Math.abs(b.h - a.h));
+      panelProgress += (target - panelProgress) * 0.16;
+      if (Math.abs(target - panelProgress) * distance < 0.3) panelProgress = target;
+    } else {
+      panelProgress = target;
     }
+    paintPanel();
+    moveLighting(false, panelSpec);
+    if (panelProgress !== target) panelRaf = requestAnimationFrame(panelTick);
   }
 
-  function rectOf(id, rx) {
-    const el = document.getElementById(id);
-    if (!el) return null;
+  function rectOf(el, rx) {
     const r = el.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return null;
-    return { x: r.left, y: r.top, w: r.width, h: r.height, rx: rx };
+    return { x: r.left, y: r.top, w: r.width, h: r.height, rx: Math.min(rx, r.width / 2, r.height / 2) };
   }
 
-  /* 齿轮孔洞的"当前几何"：直接用 FIXED 表里那个孔已经算好的 base，
-     保证面板的收/开动画终点与齿轮自己的孔**逐像素重合**（另测一次 rect 会因悬停等状态而不同 → 收尾跳变） */
-  function gearHoleRect() {
-    const f = fixed['settings-btn'];
-    const b = f && f.hole ? f.hole.base : null;
-    if (b) return { x: b.x, y: b.y, w: b.w, h: b.h, rx: b.rx };
-    return rectOf('settings-btn', 19);
-  }
-
-  /* 打开/收起：孔洞几何由 .drawer 自身的 rect 决定（面板就画在下表面，位置随视口变化） */
   function setPanel(open) {
-    panelOpen = !!open;
-    if (panelOpen) {
-      const to = rectOf('drawer', PANEL_RX);
-      if (!to) return;
-      if (!panelLive) {
-        panelShown = gearHoleRect() || to; /* 从齿轮的孔开始长 */
-        panelLive = true;
-      }
-      panelTarget = to;
-      if (panelRaf === null) panelRaf = requestAnimationFrame(panelTick);
-    } else {
-      if (!panelLive) return;
-      panelTarget = gearHoleRect() || panelShown;
-      if (panelRaf === null) panelRaf = requestAnimationFrame(panelTick);
+    if (panelOpen === open) return;
+    panelOpen = open;
+    if (open) {
+      syncPanel();
+      moveLighting(false, panelSpec);
     }
+    if (panelRaf === null) panelRaf = requestAnimationFrame(panelTick);
   }
 
-  /* 视口变化：展开状态下让孔洞直接跟上（不做补间） */
+  /* 同一展开进度应用到新测量的两端尺寸，适用于静止和正在开合的面板。 */
   function syncPanel() {
-    if (!panelLive || !panelOpen || panelRaf !== null) return;
-    const to = rectOf('drawer', PANEL_RX);
-    if (!to) return;
-    panelShown = { x: to.x, y: to.y, w: to.w, h: to.h, rx: to.rx };
-    panelTarget = to;
-    applyPanelSpec(panelShown);
+    if (!panelOpen && !panelProgress) return;
+    panelBounds = rectOf(drawer, PANEL_RX);
+    panelOrigin = rectOf(fixed['settings-btn'].el, FIXED['settings-btn'].rx);
+    paintPanel();
   }
 
   EHP.holes = {

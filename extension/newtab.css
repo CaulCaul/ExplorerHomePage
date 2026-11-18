@@ -230,9 +230,9 @@ button { font-family: inherit; }
 .search-wrap {
   position: relative;
   flex: 0 1 auto;
-  /* 与左侧引擎选择器并排，故从 88vw 里让出 ~108px，避免窄视口溢出 */
-  width: min(640px, calc(88vw - 108px));
-  min-width: 220px;
+  /* 空间足够时保留原宽度，窄视口允许搜索框让出引擎选择器所需的空间。 */
+  width: clamp(220px, calc(88vw - 108px), 640px);
+  min-width: 0;
 }
 
 .search-box {
@@ -344,7 +344,7 @@ button { font-family: inherit; }
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   gap: 14px;
-  width: min(600px, 90vw);
+  width: min(600px, 90vw, 100%);
   margin-top: 58px;
 }
 
@@ -458,7 +458,9 @@ button.tile-link {
   background-attachment: fixed;
   border: 0;
   border-radius: 22px; /* ⚠ 必须与 holes.js 的 PANEL_RX 一致 */
-  pointer-events: none; /* 收起时被板材盖住，但板材不接收指针事件，故必须显式关闭 */
+  /* 收起时保留布局尺寸。开合时 holes.js 按设置孔裁剪面板，避免从其它孔露出。 */
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .drawer.open { pointer-events: auto; }
@@ -711,25 +713,31 @@ input[type="range"] {
   background: var(--ground-fill);
 }
 
-/* 下表面光照：整屏的逐通道乘法（--ground-light 由 holes.js 按物理几何烘焙）。⚠ 不加蒙版 —— 板材只留出孔洞，所以它实际只作用于透过孔洞看到的下表面与孔内控件 */
-#ground-lit {
+/* 固定的混合层和可平移的光斑分开，光源移位时复用已绘制的渐变。 */
+.light-layer {
   position: fixed;
   inset: 0;
-  z-index: 2; /* 控件之上、板材之下：光照因此会逐像素穿过图标与文字 */
   pointer-events: none;
-  background: var(--ground-light, none);
+  overflow: clip;
   mix-blend-mode: multiply;
 }
 
-/* 下表面遮挡阴影：板材孔洞挡住直射光的区域（#shadow-mask 黑=透光区、白=被挡）。
-   烘焙值 = 环境光 ÷ 该点光照，正好把直射光那一份「除」掉 —— 阴影区只剩环境光，纯黑光色时自动没有阴影 */
-#ground-shadow {
-  position: fixed;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  background: var(--ground-shadow, none);
-  mix-blend-mode: multiply;
+.light-field {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+}
+
+/* 控件之上，板材之下。板材遮住孔外的下表面。 */
+#ground-lit,
+#ground-shadow { z-index: 2; }
+
+/* 模糊后的投影蒙版在这个坐标系里保持静止。蒙版与光斑的平移各自独立。 */
+#shadow-field {
+  position: absolute;
+  overflow: clip;
+  will-change: transform;
   -webkit-mask: url(#shadow-mask);
   mask: url(#shadow-mask);
 }
@@ -745,17 +753,9 @@ input[type="range"] {
   mask: url(#hole-mask);
 }
 
-/* 上表面光照层的补充：板材只提供反照率（--sheet-bg），照明一律由光照层相乘给出，此处不承载任何材质或纹理 */
-/* 上表面光照与 #ground-lit 是同一套逻辑：holes.js 只写 --sheet-light 变量，几何永远由 CSS 蒙版决定。
-   ⚠ 曾经的 WebGL 材质层（canvas 挂进 #wall-layer / #ground-base）已随纹理方案整体回退删除 */
 /* 上表面光照：乘在板材**与上层装饰**（签名/标题/边框）之上，使上表面的元素同样随光照变化；用 #hole-mask 裁掉孔洞，避免把孔内（下表面）照两遍 */
 #sheet-lit {
-  position: fixed;
-  inset: 0;
   z-index: 5;
-  pointer-events: none;
-  background: var(--sheet-light, none);
-  mix-blend-mode: multiply;
   -webkit-mask: url(#hole-mask);
   mask: url(#hole-mask);
 }

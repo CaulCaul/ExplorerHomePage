@@ -110,15 +110,20 @@
 
   function openDrawer() {
     drawer.classList.add('open');
+    drawer.inert = false;
     drawer.setAttribute('aria-hidden', 'false');
+    settingsBtn.setAttribute('aria-expanded', 'true');
     backdrop.hidden = false;
     /* 开合动画 = 齿轮孔洞长成整页高的大圆角矩形（面板本身不动） */
     if (EHP.holes) EHP.holes.setPanel(true);
   }
 
   function closeDrawer() {
+    if (drawer.contains(document.activeElement)) settingsBtn.focus();
     drawer.classList.remove('open');
+    drawer.inert = true;
     drawer.setAttribute('aria-hidden', 'true');
+    settingsBtn.setAttribute('aria-expanded', 'false');
     backdrop.hidden = true;
     if (EHP.holes) EHP.holes.setPanel(false);
   }

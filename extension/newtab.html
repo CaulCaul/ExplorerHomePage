@@ -11,15 +11,17 @@
        multiply 混合不能以画布（body 背景）为混合底，否则孔内无法被"反射率 × 光照"正确压暗 -->
   <div id="ground-base"></div>
   <!-- 下表面光照：逐通道乘到下面的所有内容上（包含控件），实现 反射率 × 光照 -->
-  <div id="ground-lit"></div>
+  <div id="ground-lit" class="light-layer"><div id="ground-light-field" class="light-field"></div></div>
   <!-- 下表面遮挡阴影：板材孔洞挡住直射光的区域，按几何投影（随光源移动、边缘柔化） -->
-  <div id="ground-shadow"></div>
+  <div id="ground-shadow" class="light-layer">
+    <div id="shadow-field"><div id="shadow-light-field" class="light-field"></div></div>
+  </div>
   <!-- 上层板材：单一颜色的板材，由 holes.js 挖孔 -->
   <div id="wall-layer"></div>
   <!-- 上层装饰：磁贴标题、新建虚线框、引擎边框（绘制在板材之上） -->
   <div id="tile-decor"></div>
   <!-- 上表面光照：乘在板材与上层装饰之上（被 #hole-mask 裁掉孔洞，孔内由下表面光照负责） -->
-  <div id="sheet-lit"></div>
+  <div id="sheet-lit" class="light-layer"><div id="sheet-light-field" class="light-field"></div></div>
 
   <main class="main">
     <div class="wordmark" id="wordmark">EXPLORER&nbsp;HOME</div>
@@ -93,7 +95,7 @@
   <!-- 设置面板：与其它控件同层（下表面），收起时被板材完全遮住，只在"齿轮孔洞扩大"后可见。
        开与关**都由右上角的齿轮承担**（面板内不再有叉号）；点空白处的透明接收层或 Esc 也能收回 -->
   <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
-  <aside class="drawer" id="drawer" aria-hidden="true">
+  <aside class="drawer" id="drawer" aria-hidden="true" inert>
     <!-- 标题与齿轮同高（齿轮 38px 高、面板顶距 14px，故标题行也取 38px 居中） -->
     <div class="drawer-head">
       <h2>设置</h2>
@@ -171,7 +173,7 @@
       </section>
       <section class="set-group">
         <h3>关于</h3>
-        <p class="set-hint">Explorer Home <span id="about-version">v2.0.1</span> · 浏览器主页扩展</p>
+        <p class="set-hint">Explorer Home <span id="about-version">v2.0.2</span> · 浏览器主页扩展</p>
         <p class="set-hint about-link">
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
           <span>访问<a href="https://github.com/CaulCaul/ExplorerHomePage" target="_blank" rel="noreferrer">项目仓库</a></span>
@@ -182,7 +184,7 @@
 
   <!-- 设置入口（右上角）：刻意放在设置面板**之后**——同为 z1 时后来者居上，
        所以孔洞扩大后面板之上仍能看到并点击齿轮，再次点击即收回 -->
-  <button id="settings-btn" class="settings-btn" type="button" title="设置">
+  <button id="settings-btn" class="settings-btn" type="button" title="设置" aria-controls="drawer" aria-expanded="false">
     <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
   </button>
 

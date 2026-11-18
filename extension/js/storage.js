@@ -132,8 +132,13 @@
     if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
       throw new Error('备份文件不是有效的 JSON 对象');
     }
+    if (!Array.isArray(obj.shortcuts) || !Array.isArray(obj.searchHistory) ||
+        (obj.engine !== 'bing' && obj.engine !== 'google') ||
+        !obj.settings || typeof obj.settings !== 'object' || Array.isArray(obj.settings)) {
+      throw new Error('备份缺少必要字段或数据格式不正确，请选择本扩展导出的备份文件');
+    }
     const seen = new Set();
-    const shortcuts = (Array.isArray(obj.shortcuts) ? obj.shortcuts : [])
+    const shortcuts = obj.shortcuts
       .filter(function (s) {
         return s && typeof s.title === 'string' && s.title.trim() &&
                typeof s.url === 'string' && /^[a-z][a-z0-9+.-]*:\/\//i.test(s.url);
@@ -147,7 +152,7 @@
         seen.add(k);
         return true;
       });
-    const history = (Array.isArray(obj.searchHistory) ? obj.searchHistory : [])
+    const history = obj.searchHistory
       .filter(function (h) {
         return h && typeof h.q === 'string' && h.q.trim();
       })
@@ -159,7 +164,7 @@
     await chrome.storage.local.set({
       shortcuts: shortcuts,
       searchHistory: history,
-      engine: obj.engine === 'google' ? 'google' : 'bing',
+      engine: obj.engine,
       settings: settings
     });
   }
