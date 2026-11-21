@@ -88,31 +88,54 @@
   }
 
   /* 首次运行懒初始化默认值；任何新设备克隆仓库后都是全新主页 */
-  async function ensureDefaults() {
-    const all = await getAll();
-    const patch = {};
-    if (all[KEY.shortcuts] === undefined) patch[KEY.shortcuts] = DEFAULT_SHORTCUTS;
-    if (all[KEY.engine] === undefined) patch[KEY.engine] = 'bing';
-    if (all[KEY.history] === undefined) patch[KEY.history] = [];
-    if (all[KEY.iconCache] === undefined) patch[KEY.iconCache] = {};
-    if (all[KEY.settings] === undefined) patch[KEY.settings] = DEFAULT_SETTINGS;
-    if (Object.keys(patch).length) await chrome.storage.local.set(patch);
+  function ensureDefaults() {
+    return navigator.locks.request(KEY.history, async function () {
+      const all = await getAll();
+      const patch = {};
+      if (all[KEY.shortcuts] === undefined) patch[KEY.shortcuts] = DEFAULT_SHORTCUTS;
+      if (all[KEY.engine] === undefined) patch[KEY.engine] = 'bing';
+      if (all[KEY.history] === undefined) patch[KEY.history] = [];
+      if (all[KEY.iconCache] === undefined) patch[KEY.iconCache] = {};
+      if (all[KEY.settings] === undefined) patch[KEY.settings] = DEFAULT_SETTINGS;
+      if (Object.keys(patch).length) await chrome.storage.local.set(patch);
+    });
+  }
+
+  /* 候选读取等正在写入的历史完成，多个标签页的读改写共用同一把锁。 */
+  function getHistory() {
+    return navigator.locks.request(KEY.history, { mode: 'shared' }, () => get(KEY.history, []));
   }
 
   /* 记录一次搜索：相同关键词去重后置顶 */
   async function recordSearch(q, engine) {
     q = (q || '').trim();
     if (!q) return;
-    const list = await get(KEY.history, []);
-    const idx = list.findIndex((h) => h.q === q);
-    if (idx >= 0) list.splice(idx, 1);
-    list.unshift({ q: q, engine: engine, ts: Date.now() });
-    if (list.length > HISTORY_CAP) list.length = HISTORY_CAP;
-    await set(KEY.history, list);
+    await navigator.locks.request(KEY.history, async function () {
+      const list = await get(KEY.history, []);
+      const idx = list.findIndex((h) => h.q === q);
+      if (idx >= 0) list.splice(idx, 1);
+      list.unshift({ q: q, engine: engine, ts: Date.now() });
+      if (list.length > HISTORY_CAP) list.length = HISTORY_CAP;
+      await set(KEY.history, list);
+    });
   }
 
-  async function clearHistory() {
-    await set(KEY.history, []);
+  function removeSearch(entry, historyIndex) {
+    return navigator.locks.request(KEY.history, async function () {
+      const list = await get(KEY.history, []);
+      const matches = (h) => h && h.q === entry.q && h.engine === entry.engine && h.ts === entry.ts;
+      // 优先使用已展示的位置，兼容导入备份里完全相同的两条记录。
+      const index = matches(list[historyIndex]) ? historyIndex : list.findIndex(matches);
+      if (index >= 0) {
+        list.splice(index, 1);
+        await set(KEY.history, list);
+      }
+      return list;
+    });
+  }
+
+  function clearHistory() {
+    return navigator.locks.request(KEY.history, () => set(KEY.history, []));
   }
 
   async function exportData() {
@@ -161,12 +184,12 @@
       })
       .slice(0, HISTORY_CAP);
     const settings = sanitizeSettings(obj.settings);
-    await chrome.storage.local.set({
+    await navigator.locks.request(KEY.history, () => chrome.storage.local.set({
       shortcuts: shortcuts,
       searchHistory: history,
       engine: obj.engine,
       settings: settings
-    });
+    }));
   }
 
   EHP.storage = {
@@ -180,7 +203,9 @@
     get: get,
     set: set,
     ensureDefaults: ensureDefaults,
+    getHistory: getHistory,
     recordSearch: recordSearch,
+    removeSearch: removeSearch,
     clearHistory: clearHistory,
     exportData: exportData,
     importData: importData

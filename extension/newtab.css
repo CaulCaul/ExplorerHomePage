@@ -327,13 +327,33 @@ button { font-family: inherit; }
   white-space: nowrap;
 }
 
-.sug-tag {
+.sug-delete {
+  display: grid;
+  place-items: center;
   flex: none;
-  font-size: 11px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
   color: var(--text-dim);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 1px 5px;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: color 0.15s, background 0.15s, opacity 0.15s;
+}
+
+.sug:hover .sug-delete,
+.sug:focus-within .sug-delete {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sug-delete:hover,
+.sug-delete:focus-visible {
+  background: var(--panel);
+  color: var(--text);
 }
 
 /* ---------- 快捷方式 ---------- */

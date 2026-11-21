@@ -328,5 +328,5 @@
     syncLightLabels();
   }
 
-  EHP.settings = { init: init, close: closeDrawer };
+  EHP.settings = { init: init, close: closeDrawer, showToast: showToast };
 })();
